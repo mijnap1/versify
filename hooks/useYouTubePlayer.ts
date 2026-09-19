@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 declare global {
   interface Window { YT: typeof YT; onYouTubeIframeAPIReady?: () => void }
@@ -42,6 +42,23 @@ export function useYouTubePlayer(videoId: string | null) {
     let interval: ReturnType<typeof setInterval> | undefined;
     let readyTimeout: ReturnType<typeof setTimeout> | undefined;
     let player: YT.Player | undefined;
+    let playbackActive = false;
+    function syncTime() {
+      if (cancelled || !playerRef.current) return;
+      const time = playerRef.current.getCurrentTime();
+      const total = playerRef.current.getDuration();
+      if (Number.isFinite(time)) setCurrentTime(time);
+      if (Number.isFinite(total) && total > 0) setDuration(total);
+    }
+    function updatePolling() {
+      clearInterval(interval);
+      interval = undefined;
+      if (!document.hidden) {
+        syncTime();
+        if (playbackActive) interval = setInterval(syncTime, 200);
+      }
+    }
+    document.addEventListener("visibilitychange", updatePolling);
     setBuffering(true);
     loadSDK().then(() => {
       if (cancelled || !containerRef.current) return;
@@ -62,24 +79,21 @@ export function useYouTubePlayer(videoId: string | null) {
             event.target.setVolume(volumeRef.current);
             setReady(true); setBuffering(false);
             event.target.playVideo();
-            interval = setInterval(() => {
-              if (cancelled) return;
-              const time = event.target.getCurrentTime();
-              const total = event.target.getDuration();
-              if (Number.isFinite(time)) setCurrentTime(time);
-              if (Number.isFinite(total) && total > 0) setDuration(total);
-            }, 200);
+            updatePolling();
           },
           onStateChange(event) {
             if (cancelled) return;
             setPlaying(event.data === 1);
             setBuffering(event.data === 3);
             setEnded(event.data === 0);
+            playbackActive = event.data === 1;
+            updatePolling();
             if (event.data === 1) setError(null);
           },
           onError(event) {
             if (cancelled) return;
             clearTimeout(readyTimeout);
+            playbackActive = false; updatePolling();
             setPlaying(false); setBuffering(false);
             setError([101, 150].includes(event.data) ? "This video doesn't allow embedded playback. Connect another YouTube link." : "This video can't be played here. Try another YouTube link.");
           },
@@ -87,21 +101,21 @@ export function useYouTubePlayer(videoId: string | null) {
         },
       });
     }).catch((error: Error) => { if (!cancelled) { setError(error.message); setBuffering(false); } });
-    return () => { cancelled = true; clearInterval(interval); clearTimeout(readyTimeout); playerRef.current = null; player?.destroy(); };
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", updatePolling); clearInterval(interval); clearTimeout(readyTimeout); playerRef.current = null; player?.destroy(); };
   }, [videoId]);
 
-  function toggle() {
+  const toggle = useCallback(() => {
     if (!ready) return;
     if (playing) playerRef.current?.pauseVideo();
     else playerRef.current?.playVideo();
-  }
-  function seek(time: number) {
+  }, [ready, playing]);
+  const seek = useCallback((time: number) => {
     if (!ready) return;
     const next = Math.max(0, Math.min(time, duration || Infinity));
     playerRef.current?.seekTo(next, true); setCurrentTime(next); setEnded(false);
-  }
-  function setVolume(value: number) {
+  }, [ready, duration]);
+  const setVolume = useCallback((value: number) => {
     volumeRef.current = value; setVolumeState(value); playerRef.current?.setVolume(value);
-  }
+  }, []);
   return { containerRef, playing, ready, buffering, ended, currentTime, duration, volume, error, toggle, seek, setVolume };
 }

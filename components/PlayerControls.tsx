@@ -2,7 +2,7 @@
 
 import { Expand, Heart, LoaderCircle, Minimize, Pause, Play, Repeat2, Volume2, VolumeX } from "lucide-react";
 import { Glass } from "./Glass";
-import { useRef, type CSSProperties } from "react";
+import { useMemo, useRef, type CSSProperties } from "react";
 import { formatTime } from "@/lib/lyrics";
 
 type Props = {
@@ -18,8 +18,7 @@ export function PlayerControls({ playing, buffering, currentTime, duration, volu
   const previousVolume = useRef(70);
   const progress = duration > 0 ? Math.min(100, currentTime / duration * 100) : 0;
 
-  return <div className="player-controls" role="group" aria-label="Playback controls">
-    <div className="transport">
+  const transport = useMemo(() => <div className="transport">
       <Glass className="focus-glass"><button className={`icon-button focus-button ${focusMode ? "selected" : ""}`} aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"} title={focusMode ? "Exit focus mode" : "Focus mode"} aria-pressed={focusMode} onClick={onFocusMode}>
         {focusMode ? <Minimize size={20} strokeWidth={1.6} /> : <Expand size={20} strokeWidth={1.6} />}
       </button></Glass>
@@ -41,7 +40,10 @@ export function PlayerControls({ playing, buffering, currentTime, duration, volu
           onChange={(event) => onVolume(Number(event.target.value))} style={{ "--range-progress": `${volume}%` } as CSSProperties} /></div></Glass></div>
       </div>
       <Glass className="favorite-glass"><button className={`icon-button favorite-button ${favorite ? "selected" : ""}`} title={favorite ? "Remove from favorites" : "Save to favorites"} aria-label={favorite ? "Remove from favorites" : "Save to favorites"} aria-pressed={favorite} onClick={onFavorite}><Heart size={20} fill={favorite ? "currentColor" : "none"} strokeWidth={1.6} /></button></Glass>
-    </div>
+    </div>, [playing, buffering, volume, repeat, favorite, focusMode, onPlayPause, onVolume, onRepeat, onFavorite, onFocusMode]);
+
+  return <div className="player-controls" role="group" aria-label="Playback controls">
+    {transport}
     <div className="progress-row">
       <time>{formatTime(currentTime)}</time>
       <Glass className="timeline-glass"><input type="range" min={0} max={duration || 1} step={0.1} value={Math.min(currentTime, duration || 1)} disabled={!canSeek}

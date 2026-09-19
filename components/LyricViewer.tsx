@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { AudioLines, RotateCcw } from "lucide-react";
-import { activeLyricIndex, formatTime, type LyricLine } from "@/lib/lyrics";
+import { formatTime, type LyricLine } from "@/lib/lyrics";
 
-type Props = { lines: LyricLine[]; plainLyrics: string | null; currentTime: number; offset: number; loading: boolean; error: string | null; instrumental: boolean; onSeek: (time: number) => void; onRetry: () => void; canSeek: boolean; focusMode: boolean };
+type Props = { lines: LyricLine[]; plainLyrics: string | null; active: number; offset: number; loading: boolean; error: string | null; instrumental: boolean; onSeek: (time: number) => void; onRetry: () => void; canSeek: boolean; focusMode: boolean };
 
-export function LyricViewer({ lines, plainLyrics, currentTime, offset, loading, error, instrumental, onSeek, onRetry, canSeek, focusMode }: Props) {
+export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, active, offset, loading, error, instrumental, onSeek, onRetry, canSeek, focusMode }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef(0);
-  const active = activeLyricIndex(lines, currentTime + offset);
   const [following, setFollowing] = useState(true);
 
   useEffect(() => { setFollowing(true); }, [active, lines]);
@@ -60,4 +59,4 @@ export function LyricViewer({ lines, plainLyrics, currentTime, offset, loading, 
     </div>
     {!lines.length && plainLyrics && <span className="unsynced-label">Timing unavailable</span>}
   </div>;
-}
+});

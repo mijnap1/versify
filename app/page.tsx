@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight, ExternalLink, FolderHeart, Heart, Link2, X } from "lucide-react";
 import { Glass } from "@/components/Glass";
 import { SearchBar } from "@/components/SearchBar";
 import { LyricViewer } from "@/components/LyricViewer";
 import { PlayerControls } from "@/components/PlayerControls";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
-import { parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
+import { activeLyricIndex, parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
 import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
 import { featuredTracks, type Track } from "@/lib/tracks";
 
@@ -65,12 +65,12 @@ export default function Home() {
     } catch { setStorageError("Saved songs could not be loaded in this browser."); }
   }, []);
 
-  function toggleFavorite(song: Track) {
+  const toggleFavorite = useCallback((song: Track) => {
     const next = favorites.some((saved) => saved.id === song.id) ? favorites.filter((saved) => saved.id !== song.id) : [song, ...favorites];
     setFavorites(next);
     try { localStorage.setItem("verse-favorites", JSON.stringify(next)); setStorageError(""); }
     catch { setStorageError("Favorites are available for this session only. Browser storage is unavailable."); }
-  }
+  }, [favorites]);
 
   useEffect(() => {
     const image = artworkRef.current;
@@ -128,26 +128,32 @@ export default function Home() {
     else linkDialog.current?.close();
   }, [linkOpen]);
 
-  function selectTrack(next: Track) {
+  const selectTrack = useCallback((next: Track) => {
     starterLyrics.current = null;
     videoRequest.current?.abort();
     setStarted(true); setVideoId(null); setMatching(true); pendingSeek.current = null;
     setTrack(next); setOffset(0); setLinkOpen(false); setMatchingError(null);
     setArtworkFailed(false); setLink(""); setLinkError("");
-  }
+  }, []);
 
-  function playPause() {
+  const playPause = useCallback(() => {
     if (!videoId) { setLinkOpen(true); return; }
     if (!started) setStarted(true);
     else if (player.error && !player.ready) setStarted(false);
     else player.toggle();
-  }
+  }, [videoId, started, player.error, player.ready, player.toggle]);
 
-  function seek(time: number) {
+  const seek = useCallback((time: number) => {
     if (!videoId) { setLinkOpen(true); return; }
     if (!player.ready) { pendingSeek.current = time; setStarted(true); }
     else player.seek(time);
-  }
+  }, [videoId, player.ready, player.seek]);
+
+  const retryLyrics = useCallback(() => setRetry((value) => value + 1), []);
+  const toggleRepeat = useCallback(() => setRepeat((value) => !value), []);
+  const toggleFocus = useCallback(() => setFocusMode((value) => !value), []);
+  const saveCurrent = useCallback(() => toggleFavorite({ ...track, videoId: videoId ?? undefined }), [toggleFavorite, track, videoId]);
+  const favoritesTrigger = useMemo(() => <Glass className="favorites-trigger"><button className="icon-button" aria-label="Open favorites" title="Favorites" onClick={() => favoritesDialog.current?.showModal()}><FolderHeart size={20} strokeWidth={1.5} /></button></Glass>, []);
 
   function colorFromArtwork(image: HTMLImageElement) {
     const canvas = document.createElement("canvas");
@@ -168,7 +174,7 @@ export default function Home() {
     } as CSSProperties} />
 
     <header className="search-position" inert={focusMode} aria-hidden={focusMode}><SearchBar onSelect={selectTrack} />
-      <Glass className="favorites-trigger"><button className="icon-button" aria-label="Open favorites" title="Favorites" onClick={() => favoritesDialog.current?.showModal()}><FolderHeart size={20} strokeWidth={1.5} /></button></Glass>
+      {favoritesTrigger}
     </header>
 
     <main className="listening-room">
@@ -198,17 +204,17 @@ export default function Home() {
       </section>
 
       <section className="lyrics-panel" aria-label="Lyrics">
-        <LyricViewer lines={lyrics.lines} plainLyrics={lyrics.plain} currentTime={player.currentTime} offset={offset}
+        <LyricViewer lines={lyrics.lines} plainLyrics={lyrics.plain} active={activeLyricIndex(lyrics.lines, player.currentTime + offset)} offset={offset}
           loading={lyrics.loading} error={lyrics.error} instrumental={lyrics.instrumental} onSeek={seek}
-          onRetry={() => setRetry(retry + 1)} canSeek={!matching} focusMode={focusMode} />
+          onRetry={retryLyrics} canSeek={!matching} focusMode={focusMode} />
       </section>
     </main>
 
     <PlayerControls playing={player.playing} buffering={player.buffering || matching} currentTime={player.currentTime}
       duration={player.duration || track.duration} volume={player.volume} repeat={repeat} canSeek={!!videoId && !matching}
-      onPlayPause={playPause} onSeek={seek} onVolume={player.setVolume} onRepeat={() => setRepeat(!repeat)}
-      favorite={isFavorite} onFavorite={() => toggleFavorite({ ...track, videoId: videoId ?? undefined })}
-      focusMode={focusMode} onFocusMode={() => setFocusMode((value) => !value)} />
+      onPlayPause={playPause} onSeek={seek} onVolume={player.setVolume} onRepeat={toggleRepeat}
+      favorite={isFavorite} onFavorite={saveCurrent}
+      focusMode={focusMode} onFocusMode={toggleFocus} />
 
     <footer className="site-credit"><small>&copy; 2026 Jamie Ryu</small></footer>
 

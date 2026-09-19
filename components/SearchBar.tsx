@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { ArrowUpLeft, LoaderCircle, Search, X } from "lucide-react";
 import type { Track } from "@/lib/tracks";
 import { Glass } from "./Glass";
 
-export function SearchBar({ onSelect }: { onSelect: (track: Track) => void }) {
+export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (track: Track) => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -81,4 +81,4 @@ export function SearchBar({ onSelect }: { onSelect: (track: Track) => void }) {
       </ul>
     </div>}
   </div>;
-}
+});
