@@ -1,0 +1,53 @@
+"use client";
+
+import { Expand, Heart, LoaderCircle, Minimize, Pause, Play, Repeat2, Volume2, VolumeX } from "lucide-react";
+import { Glass } from "./Glass";
+import { useRef, type CSSProperties } from "react";
+import { formatTime } from "@/lib/lyrics";
+
+type Props = {
+  playing: boolean; buffering: boolean; currentTime: number; duration: number;
+  volume: number; repeat: boolean; canSeek: boolean;
+  onPlayPause: () => void; onSeek: (time: number) => void;
+  onVolume: (volume: number) => void; onRepeat: () => void;
+  favorite: boolean; onFavorite: () => void;
+  focusMode: boolean; onFocusMode: () => void;
+};
+
+export function PlayerControls({ playing, buffering, currentTime, duration, volume, repeat, canSeek, onPlayPause, onSeek, onVolume, onRepeat, favorite, onFavorite, focusMode, onFocusMode }: Props) {
+  const previousVolume = useRef(70);
+  const progress = duration > 0 ? Math.min(100, currentTime / duration * 100) : 0;
+
+  return <div className="player-controls" role="group" aria-label="Playback controls">
+    <div className="transport">
+      <Glass className="focus-glass"><button className={`icon-button focus-button ${focusMode ? "selected" : ""}`} aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"} title={focusMode ? "Exit focus mode" : "Focus mode"} aria-pressed={focusMode} onClick={onFocusMode}>
+        {focusMode ? <Minimize size={20} strokeWidth={1.6} /> : <Expand size={20} strokeWidth={1.6} />}
+      </button></Glass>
+      <Glass className="repeat-glass">
+      <button className={`icon-button repeat-button ${repeat ? "selected" : ""}`} title="Loop song" aria-label="Loop song" aria-pressed={repeat} onClick={onRepeat}>
+        <Repeat2 size={21} strokeWidth={1.6} />
+      </button></Glass>
+      <Glass className="play-glass">
+      <button className="play-button" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause" : "Play"} onClick={onPlayPause} disabled={buffering}>
+        {buffering ? <LoaderCircle size={27} className="animate-spin" /> : playing ? <Pause size={27} fill="currentColor" strokeWidth={1.3} /> : <Play size={27} fill="currentColor" strokeWidth={1.3} className="play-glyph" />}
+      </button></Glass>
+      <div className="volume-control">
+        <Glass>
+        <button className="icon-button" aria-label={volume === 0 ? "Unmute" : "Mute"} title={volume === 0 ? "Unmute" : "Mute"}
+          onClick={() => { if (volume) { previousVolume.current = volume; onVolume(0); } else onVolume(previousVolume.current); }}>
+          {volume === 0 ? <VolumeX size={21} strokeWidth={1.6} /> : <Volume2 size={21} strokeWidth={1.6} />}
+        </button></Glass>
+        <div className="volume-popover"><Glass className="volume-glass"><div className="volume-slider-stage"><input type="range" min={0} max={100} value={volume} aria-label="Volume" aria-orientation="vertical"
+          onChange={(event) => onVolume(Number(event.target.value))} style={{ "--range-progress": `${volume}%` } as CSSProperties} /></div></Glass></div>
+      </div>
+      <Glass className="favorite-glass"><button className={`icon-button favorite-button ${favorite ? "selected" : ""}`} title={favorite ? "Remove from favorites" : "Save to favorites"} aria-label={favorite ? "Remove from favorites" : "Save to favorites"} aria-pressed={favorite} onClick={onFavorite}><Heart size={20} fill={favorite ? "currentColor" : "none"} strokeWidth={1.6} /></button></Glass>
+    </div>
+    <div className="progress-row">
+      <time>{formatTime(currentTime)}</time>
+      <Glass className="timeline-glass"><input type="range" min={0} max={duration || 1} step={0.1} value={Math.min(currentTime, duration || 1)} disabled={!canSeek}
+        aria-label="Playback position" aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
+        onChange={(event) => onSeek(Number(event.target.value))} style={{ "--range-progress": `${progress}%` } as CSSProperties} /></Glass>
+      <time>{formatTime(duration)}</time>
+    </div>
+  </div>;
+}
