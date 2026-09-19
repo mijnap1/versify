@@ -11,6 +11,9 @@
 @property --wallpaper-end { syntax: "<color>"; inherits: false; initial-value: #dfc5c9; }
 
 :root { color-scheme: light; --ink: #302a2b; --muted: #746d70; --ease-out: cubic-bezier(0.23, 1, 0.32, 1); }
+.starter-loading { min-height: 100svh; display: flex; align-items: center; justify-content: center; gap: 12px; color: #746d70; }
+.starter-spinner { width: 18px; height: 18px; border: 1px solid #746d7030; border-top-color: #746d70; border-radius: 50%; animation: record-turn 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .starter-spinner { animation: none; } }
 * { box-sizing: border-box; letter-spacing: 0; }
 html, body { margin: 0; min-height: 100%; background: #f5eeee; }
 body { color: var(--ink); font-family: "Manrope Variable", Arial, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }

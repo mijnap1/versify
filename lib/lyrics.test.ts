@@ -2,6 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { parseLrc, activeLyricIndex, youtubeId } from "./lyrics.ts";
 import { artworkPalette } from "./artwork.ts";
+import { hasTimedLyrics } from "./starter.ts";
+
+test("random starters require multiple distinct timed vocal lines", () => {
+  const syncedLyrics = "[00:10]one\n[00:20]two\n[00:30]three\n[00:40]four\n[00:50]five";
+  assert.equal(hasTimedLyrics({ syncedLyrics }, 180), true);
+  assert.equal(hasTimedLyrics({ syncedLyrics, instrumental: true }, 180), false);
+  assert.equal(hasTimedLyrics({ syncedLyrics: "[00:00]entire song on one line" }, 180), false);
+  assert.equal(hasTimedLyrics({ syncedLyrics: "[00:10]\n[00:20]\n[00:30]\n[00:40]\n[00:50]" }, 180), false);
+  assert.equal(hasTimedLyrics({ syncedLyrics }, 15), false);
+  assert.equal(hasTimedLyrics({ syncedLyrics: null }, 180), false);
+});
 import { chooseAudioVideo, type VideoCandidate } from "./video-match.ts";
 
 test("audio matching prefers album-length lyrics over music videos and altered recordings", () => {

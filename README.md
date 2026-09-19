@@ -2,7 +2,7 @@
 
 A minimal listening room built with Next.js App Router, React, TypeScript, and Tailwind CSS. Floating glass search, an album sleeve and rotating record, synchronized lyrics, and standalone playback controls sit on a gradient sampled from the current artwork.
 
-Each fresh page load chooses a random song from a verified starter pool: Space Song by Beach House or Let It Happen by Tame Impala. Both have synchronized lyrics; instrumentals and incomplete lyric results are excluded. It loads the artwork and lyrics without automatically playing audio. Lyrics still require the external provider to be available.
+Each fresh page load searches a changing international Apple music catalog pool and randomly checks candidates against LRCLIB. A starter must have at least five distinct timed vocal lines spanning at least 30 seconds. Verified lyric data is returned with the track and reused immediately, not fetched twice. This is broad catalog discovery, not uniform sampling of every song worldwide. If candidates fail, Space Song and Let It Happen are checked as fallbacks. If no timed lyrics can be verified, an honest service error is shown instead. Playback remains paused until requested.
 
 ## Run
 

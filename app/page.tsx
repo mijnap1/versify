@@ -9,7 +9,7 @@ import { PlayerControls } from "@/components/PlayerControls";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
 import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
-import { featuredTracks, starterTracks, type Track } from "@/lib/tracks";
+import { featuredTracks, type Track } from "@/lib/tracks";
 
 type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boolean; loading: boolean; error: string | null };
 const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, loading: true, error: null };
@@ -38,14 +38,22 @@ export default function Home() {
   const artworkRef = useRef<HTMLImageElement>(null);
   const pendingSeek = useRef<number | null>(null);
   const videoRequest = useRef<AbortController | null>(null);
+  const starterLyrics = useRef<{ id: string; data: LyricsState } | null>(null);
   const player = useYouTubePlayer(started ? videoId : null);
   const isFavorite = favorites.some((saved) => saved.id === track.id);
 
   useEffect(() => {
-    const starter = starterTracks[Math.floor(Math.random() * starterTracks.length)];
-    setTrack(starter);
-    setVideoId(starter.videoId ?? null);
-    setInitialized(true);
+    const controller = new AbortController();
+    fetch("/api/starter", { signal: controller.signal }).then(async (response) => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      if (controller.signal.aborted) return;
+      starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
+      setTrack(data.track); setVideoId(null);
+    }).catch(() => {
+      if (!controller.signal.aborted) starterLyrics.current = { id: featuredTracks[0].id, data: { ...emptyLyrics, loading: false, error: "Lyrics services are unavailable. Try again or search for a song." } };
+    }).finally(() => { if (!controller.signal.aborted) setInitialized(true); });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -72,6 +80,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!initialized) return;
+    if (starterLyrics.current?.id === track.id && retry === 0) {
+      setLyrics(starterLyrics.current.data);
+      return;
+    }
     const controller = new AbortController();
     setLyrics(emptyLyrics);
     const params = new URLSearchParams({ title: track.title, artist: track.artist, album: track.album, duration: String(track.duration) });
@@ -117,6 +129,7 @@ export default function Home() {
   }, [linkOpen]);
 
   function selectTrack(next: Track) {
+    starterLyrics.current = null;
     videoRequest.current?.abort();
     setStarted(true); setVideoId(null); setMatching(true); pendingSeek.current = null;
     setTrack(next); setOffset(0); setLinkOpen(false); setMatchingError(null);
@@ -147,7 +160,9 @@ export default function Home() {
     } catch { setPalette(defaultPalette); }
   }
 
-  return <div className={`app-shell ${focusMode ? "is-focused" : ""}`} style={{ visibility: initialized ? "visible" : "hidden" }}>
+  if (!initialized) return <div className="starter-loading" role="status"><span className="starter-spinner" aria-hidden="true" /><span>Finding your first song...</span></div>;
+
+  return <div className={`app-shell ${focusMode ? "is-focused" : ""}`}>
     <div className="wallpaper" aria-hidden="true" style={{
       "--wallpaper-start": palette[0], "--wallpaper-middle": palette[1], "--wallpaper-end": palette[2],
     } as CSSProperties} />
