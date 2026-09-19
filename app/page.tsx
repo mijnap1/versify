@@ -210,6 +210,8 @@ export default function Home() {
       favorite={isFavorite} onFavorite={() => toggleFavorite({ ...track, videoId: videoId ?? undefined })}
       focusMode={focusMode} onFocusMode={() => setFocusMode((value) => !value)} />
 
+    <footer className="site-credit"><small>&copy; 2026 Jamie Ryu</small></footer>
+
     <div ref={player.containerRef} className="audio-engine" aria-hidden="true" inert />
 
     <dialog ref={favoritesDialog} className="source-dialog favorites-dialog" aria-labelledby="favorites-title"

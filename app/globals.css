@@ -236,6 +236,12 @@ input[type="range"]:disabled { cursor: default; opacity: .45; }
 @media (prefers-contrast: more) { .lyric-line, .lyric-line.past { opacity: 1; filter: none; color: #726370; }.lyric-line.active, .lyric-line.upcoming { color: #171318; }.search-field, .transport > .icon-button, .volume-control > .icon-button, .play-button { border-color: #827280; } }
 
 .search-position, .album-panel { transition: opacity 250ms var(--ease-out), filter 250ms var(--ease-out); }
+.site-credit { position: absolute; right: 32px; bottom: 12px; color: #746d70; line-height: 14px; }
+.site-credit small { font-size: 10px; }
+@media (max-width: 600px) {
+  .app-shell { padding-bottom: max(40px, calc(env(safe-area-inset-bottom) + 28px)); }
+  .site-credit { right: 0; left: 0; bottom: max(8px, env(safe-area-inset-bottom)); text-align: center; }
+}
 .lyrics-panel { transition: transform 250ms var(--ease-out); }
 .is-focused .search-position, .is-focused .album-panel { opacity: 0; filter: blur(6px); pointer-events: none; }
 .focus-button.selected { color: #382b34; background: #ffffff40; }
