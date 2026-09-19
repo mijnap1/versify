@@ -19,3 +19,7 @@ export const featuredTracks: Track[] = [
 export function featuredMatch(title: string, artist: string) {
   return featuredTracks.find((track) => track.title.toLowerCase() === title.toLowerCase() && track.artist.toLowerCase() === artist.toLowerCase());
 }
+
+// Only recordings verified to have a complete synchronized lyric response.
+export const starterTracks = featuredTracks.filter((track) =>
+  track.id === "space-song" || track.id === "let-it-happen");

@@ -2,6 +2,8 @@
 
 A minimal listening room built with Next.js App Router, React, TypeScript, and Tailwind CSS. Floating glass search, an album sleeve and rotating record, synchronized lyrics, and standalone playback controls sit on a gradient sampled from the current artwork.
 
+Each fresh page load chooses a random song from a verified starter pool: Space Song by Beach House or Let It Happen by Tame Impala. Both have synchronized lyrics; instrumentals and incomplete lyric results are excluded. It loads the artwork and lyrics without automatically playing audio. Lyrics still require the external provider to be available.
+
 ## Run
 
 Create a local `.env.local` using the variable names in `.env.example` and add your own key. Real `.env` files, build output, and dependencies are excluded from Git. Never commit API keys. Deployment environment variables must be configured separately in the hosting dashboard.

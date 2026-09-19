@@ -9,12 +9,13 @@ import { PlayerControls } from "@/components/PlayerControls";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
 import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
-import { featuredTracks, type Track } from "@/lib/tracks";
+import { featuredTracks, starterTracks, type Track } from "@/lib/tracks";
 
 type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boolean; loading: boolean; error: string | null };
 const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, loading: true, error: null };
 
 export default function Home() {
+  const [initialized, setInitialized] = useState(false);
   const [track, setTrack] = useState<Track>(featuredTracks[0]);
   const [videoId, setVideoId] = useState<string | null>(featuredTracks[0].videoId!);
   const [started, setStarted] = useState(false);
@@ -41,6 +42,13 @@ export default function Home() {
   const isFavorite = favorites.some((saved) => saved.id === track.id);
 
   useEffect(() => {
+    const starter = starterTracks[Math.floor(Math.random() * starterTracks.length)];
+    setTrack(starter);
+    setVideoId(starter.videoId ?? null);
+    setInitialized(true);
+  }, []);
+
+  useEffect(() => {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem("verse-favorites") || "[]");
       if (Array.isArray(saved)) setFavorites(saved.filter((item): item is Track =>
@@ -63,6 +71,7 @@ export default function Home() {
   }, [track.artwork]);
 
   useEffect(() => {
+    if (!initialized) return;
     const controller = new AbortController();
     setLyrics(emptyLyrics);
     const params = new URLSearchParams({ title: track.title, artist: track.artist, album: track.album, duration: String(track.duration) });
@@ -77,9 +86,10 @@ export default function Home() {
       if (!controller.signal.aborted) setLyrics({ ...emptyLyrics, loading: false, error: error.message });
     });
     return () => controller.abort();
-  }, [track, retry]);
+  }, [track, retry, initialized]);
 
   useEffect(() => {
+    if (!initialized) return;
     const controller = new AbortController();
     videoRequest.current = controller;
     setMatching(true); setMatchingError(null);
@@ -89,7 +99,7 @@ export default function Home() {
       .catch((error: Error) => { if (!controller.signal.aborted) setMatchingError(error.message); })
       .finally(() => { if (!controller.signal.aborted) setMatching(false); });
     return () => controller.abort();
-  }, [track]);
+  }, [track, initialized]);
 
   useEffect(() => {
     if (player.ready && pendingSeek.current !== null) {
@@ -137,7 +147,7 @@ export default function Home() {
     } catch { setPalette(defaultPalette); }
   }
 
-  return <div className={`app-shell ${focusMode ? "is-focused" : ""}`}>
+  return <div className={`app-shell ${focusMode ? "is-focused" : ""}`} style={{ visibility: initialized ? "visible" : "hidden" }}>
     <div className="wallpaper" aria-hidden="true" style={{
       "--wallpaper-start": palette[0], "--wallpaper-middle": palette[1], "--wallpaper-end": palette[2],
     } as CSSProperties} />
