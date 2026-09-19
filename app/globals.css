@@ -55,9 +55,10 @@ a { color: inherit; text-decoration: none; }
 .album-artwork { display: block; width: 100%; height: 100%; object-fit: cover; }
 .artwork-fallback { width: 100%; height: 100%; background: #d5cbd1; display: grid; place-items: center; padding: 30px; text-align: center; }
 .artwork-fallback span { font-size: 24px; font-weight: 500; overflow-wrap: anywhere; }
-.vinyl { position: absolute; top: 4%; left: 39%; width: 93%; aspect-ratio: 1; border-radius: 50%; box-shadow: 8px 17px 38px #35243727; animation: record-turn 18s linear infinite; animation-play-state: paused; }
-.vinyl > img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
-.is-playing .vinyl { animation-play-state: running; }
+.vinyl { position: absolute; top: 4%; left: 39%; width: 93%; aspect-ratio: 1; border-radius: 50%; box-shadow: 8px 17px 38px #35243727; transform: translateX(0); transition: transform 300ms var(--ease-out); }
+.vinyl > img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: contain; animation: record-turn 18s linear infinite; animation-play-state: paused; }
+.is-playing .vinyl { transform: translateX(23%); }
+.is-playing .vinyl > img { animation-play-state: running; }
 .track-info { margin-top: 30px; max-width: 440px; animation: sleeve-in 280ms var(--ease-out) both; }
 .track-info h1 { margin: 0; font-size: 32px; line-height: 1.18; font-weight: 550; overflow-wrap: anywhere; }
 .artist-row { display: flex; align-items: center; gap: 14px; margin-top: 9px; }
@@ -229,7 +230,7 @@ input[type="range"]:disabled { cursor: default; opacity: .45; }
   .app-shell { padding-block: 22px; gap: 12px; }.record-scene { max-width: 270px; }.track-info { margin-top: 22px; }.lyrics-panel { height: min(380px, calc(100svh - 220px)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .vinyl, .waveform i { animation: none; }.sleeve, .track-info, .lyric-skeleton { animation: none; }.lyric-line { transform: none; filter: none; }.lyric-line.active { transform: none; }
+  .vinyl > img, .waveform i { animation: none; }.vinyl { transition: none !important; }.sleeve, .track-info, .lyric-skeleton { animation: none; }.lyric-line { transform: none; filter: none; }.lyric-line.active { transform: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 100ms !important; }
 }
 @media (prefers-reduced-transparency: reduce) { .search-field, .search-popover, .transport > .icon-button, .volume-control > .icon-button, .play-button, .volume-popover { backdrop-filter: none; background: #f8f4f6; } }
