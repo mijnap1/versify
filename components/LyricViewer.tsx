@@ -2,32 +2,33 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { AudioLines, RotateCcw } from "lucide-react";
+import { languages, type Settings } from "@/lib/settings";
 import { formatTime, type LyricLine } from "@/lib/lyrics";
 
-type Props = { lines: LyricLine[]; plainLyrics: string | null; active: number; offset: number; loading: boolean; error: string | null; instrumental: boolean; onSeek: (time: number) => void; onRetry: () => void; canSeek: boolean; fullscreen: boolean; translating: boolean };
+type Props = { lines: LyricLine[]; plainLyrics: string | null; active: number; offset: number; loading: boolean; error: string | null; instrumental: boolean; onSeek: (time: number) => void; onRetry: () => void; canSeek: boolean; fullscreen: boolean; translating: boolean; language: Settings["language"]; lyricScale: number };
 
-export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, active, offset, loading, error, instrumental, onSeek, onRetry, canSeek, fullscreen, translating }: Props) {
+export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, active, offset, loading, error, instrumental, onSeek, onRetry, canSeek, fullscreen, translating, language, lyricScale }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef(0);
   const [following, setFollowing] = useState(true);
   const source = JSON.stringify(lines.length ? lines.map((line) => line.text) : plainLyrics?.split("\n") ?? []);
-  const [translated, setTranslated] = useState<{ source: string; lines: string[] } | null>(null);
+  const [translated, setTranslated] = useState<{ source: string; language: string; lines: string[] } | null>(null);
   const [translationError, setTranslationError] = useState("");
-  const translations = translating && translated?.source === source ? translated.lines : null;
+  const translations = translating && (translated?.source === source && translated.language === language) ? translated.lines : null;
 
   useEffect(() => {
-    if (!translating || loading || source === "[]" || translated?.source === source) return;
+    if (!translating || loading || source === "[]" || (translated?.source === source && translated.language === language)) return;
     const controller = new AbortController();
     setTranslationError("");
-    fetch("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines: JSON.parse(source) }), signal: controller.signal })
+    fetch("/api/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines: JSON.parse(source), target: language }), signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Translation couldn't be loaded.");
-        if (!controller.signal.aborted) setTranslated({ source, lines: data.lines });
+        if (!controller.signal.aborted) setTranslated({ source, language, lines: data.lines });
       })
       .catch((error: Error) => { if (!controller.signal.aborted) setTranslationError(error.message); });
     return () => controller.abort();
-  }, [translating, loading, source, translated]);
+  }, [translating, loading, source, translated, language]);
 
   useEffect(() => { setFollowing(true); }, [active, lines]);
   useEffect(() => {
@@ -51,7 +52,7 @@ export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, activ
     }
     scrollFrame.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(scrollFrame.current);
-  }, [active, following, lines, fullscreen, translations, translating]);
+  }, [active, following, lines, fullscreen, translations, translating, lyricScale]);
 
   function stopFollowing() {
     cancelAnimationFrame(scrollFrame.current); setFollowing(false);
@@ -62,7 +63,7 @@ export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, activ
   if (!lines.length && !plainLyrics) return <div className="lyric-empty"><AudioLines size={34} /><h2>{instrumental ? "Some things need no words." : "Just you and the music."}</h2><p>{instrumental ? "An instrumental moment." : "Lyrics aren't available for this song yet."}</p></div>;
 
   return <div className="lyric-viewer">
-    {translating && !loading && !translations && <p className="translation-status" role="status">{translationError || "Translating to Korean…"}</p>}
+    {translating && !loading && !translations && <p className="translation-status" role="status">{translationError || `Translating to ${languages[language]}…`}</p>}
     <div className="lyric-scroll" ref={viewport} onWheel={stopFollowing} onTouchStart={stopFollowing} onKeyDown={(event) => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) stopFollowing(); }} tabIndex={0} aria-label="Song lyrics">
       <div className="lyric-lines">
         {lines.length ? <>
@@ -72,9 +73,9 @@ export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, activ
             aria-label={`${line.text || "Instrumental"}, seek to ${formatTime(line.time)}`}
             onClick={() => { setFollowing(true); onSeek(Math.max(0, line.time - offset)); }}>
             {line.text || <span className="instrumental-dots" aria-hidden="true">&bull; &bull; &bull;</span>}
-            {translations?.[index] && <span className="lyric-translation" lang="ko">{translations[index]}</span>}
+            {translations?.[index] && <span className="lyric-translation" lang={language}>{translations[index]}</span>}
           </button>)}
-        </> : plainLyrics?.split("\n").map((line, index) => <p className="plain-line" key={index}>{line || "\u00a0"}{translations?.[index] && <span className="lyric-translation" lang="ko">{translations[index]}</span>}</p>)}
+        </> : plainLyrics?.split("\n").map((line, index) => <p className="plain-line" key={index}>{line || "\u00a0"}{translations?.[index] && <span className="lyric-translation" lang={language}>{translations[index]}</span>}</p>)}
       </div>
     </div>
     {!lines.length && plainLyrics && <span className="unsynced-label">Timing unavailable</span>}

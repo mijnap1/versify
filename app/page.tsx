@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight, ExternalLink, Heart, Link2, X } from "lucide-react";
 import { MoreActions } from "@/components/MoreActions";
+import { SettingsDialog } from "@/components/SettingsDialog";
+import { defaultSettings, readSettings, languages, type Settings } from "@/lib/settings";
 import { Clock } from "@/components/Clock";
 import { SearchBar } from "@/components/SearchBar";
 import { LyricViewer } from "@/components/LyricViewer";
@@ -16,6 +18,18 @@ type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boo
 const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, loading: true, error: null };
 
 export default function Home() {
+  const [settings, setSettings] = useState(defaultSettings);
+  const [settingsError, setSettingsError] = useState("");
+  const settingsDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    try { setSettings(readSettings(JSON.parse(localStorage.getItem("verse-settings") || "{}"))); }
+    catch { setSettingsError("Settings could not be restored."); }
+  }, []);
+  function updateSettings(next: Settings) {
+    setSettings(next);
+    try { localStorage.setItem("verse-settings", JSON.stringify(next)); setSettingsError(""); }
+    catch { setSettingsError("Settings will apply for this visit only."); }
+  }
   const [translating, setTranslating] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [loadingDismissed, setLoadingDismissed] = useState(false);
@@ -213,13 +227,13 @@ export default function Home() {
     <span>Finding your first song...</span>
     </div>}
 
-  {initialized && <div className="app-shell">
+  {initialized && <div className="app-shell" style={{ "--lyric-scale": settings.lyricScale } as CSSProperties}>
     <div className="wallpaper" aria-hidden="true" style={{
       "--wallpaper-start": palette[0], "--wallpaper-middle": palette[1], "--wallpaper-end": palette[2],
     } as CSSProperties} />
 
-    <header className="search-position"><Clock /><SearchBar onSelect={selectTrack} />
-      <MoreActions onFavorites={() => favoritesDialog.current?.showModal()} translating={translating} onTranslate={() => setTranslating((value) => !value)} />
+    <header className="search-position"><Clock hour12={settings.hour12} /><SearchBar onSelect={selectTrack} />
+      <MoreActions onSettings={() => settingsDialog.current?.showModal()} languageName={languages[settings.language]} onFavorites={() => favoritesDialog.current?.showModal()} translating={translating} onTranslate={() => setTranslating((value) => !value)} />
     </header>
 
     <main className="listening-room">
@@ -251,7 +265,7 @@ export default function Home() {
       <section className="lyrics-panel" aria-label="Lyrics">
         <LyricViewer lines={lyrics.lines} plainLyrics={lyrics.plain} active={activeLyricIndex(lyrics.lines, player.currentTime + offset)} offset={offset}
           loading={lyrics.loading} error={lyrics.error} instrumental={lyrics.instrumental} onSeek={seek}
-          onRetry={retryLyrics} canSeek={!matching} fullscreen={fullscreen} translating={translating} />
+          onRetry={retryLyrics} canSeek={!matching} fullscreen={fullscreen} translating={translating} language={settings.language} lyricScale={settings.lyricScale} />
       </section>
     </main>
 
@@ -262,6 +276,7 @@ export default function Home() {
       fullscreen={fullscreen} onFullscreen={toggleFullscreen} />
     {fullscreenError && <p className="audio-notice" role="alert">{fullscreenError}</p>}
 
+    <SettingsDialog dialogRef={settingsDialog} settings={settings} onChange={updateSettings} error={settingsError} />
     <footer className="site-credit"><small>&copy; 2026 Jamie Ryu</small></footer>
 
     <div ref={player.containerRef} className="audio-engine" aria-hidden="true" inert />
