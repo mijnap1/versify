@@ -49,7 +49,7 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error);
       if (controller.signal.aborted) return;
       starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
-      setTrack(data.track); setVideoId(null);
+      setTrack(data.track); setVideoId(data.track.videoId ?? null);
     }).catch(() => {
       if (!controller.signal.aborted) starterLyrics.current = { id: featuredTracks[0].id, data: { ...emptyLyrics, loading: false, error: "Lyrics services are unavailable. Try again or search for a song." } };
     }).finally(() => { if (!controller.signal.aborted) setInitialized(true); });
@@ -102,6 +102,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!initialized) return;
+    if (track.videoId) { setVideoId(track.videoId); setMatching(false); setMatchingError(null); return; }
     const controller = new AbortController();
     videoRequest.current = controller;
     setMatching(true); setMatchingError(null);
@@ -120,10 +121,6 @@ export default function Home() {
   }, [player.ready]);
 
   useEffect(() => {
-    if (player.ended && repeat) { player.seek(0); player.toggle(); }
-  }, [player.ended, repeat]);
-
-  useEffect(() => {
     if (linkOpen) linkDialog.current?.showModal();
     else linkDialog.current?.close();
   }, [linkOpen]);
@@ -131,10 +128,27 @@ export default function Home() {
   const selectTrack = useCallback((next: Track) => {
     starterLyrics.current = null;
     videoRequest.current?.abort();
-    setStarted(true); setVideoId(null); setMatching(true); pendingSeek.current = null;
+    setStarted(true); setVideoId(next.videoId ?? null); setMatching(!next.videoId); pendingSeek.current = null;
     setTrack(next); setOffset(0); setLinkOpen(false); setMatchingError(null);
     setArtworkFailed(false); setLink(""); setLinkError("");
   }, []);
+
+  useEffect(() => {
+    if (!player.ended) return;
+    if (repeat) { player.seek(0); player.toggle(); return; }
+
+    const controller = new AbortController();
+    fetch(`/api/next?${new URLSearchParams({ artist: track.artist, exclude: track.id })}`, { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        if (controller.signal.aborted) return;
+        selectTrack(data.track);
+        starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
+      })
+      .catch((error: Error) => { if (!controller.signal.aborted) setMatchingError(error.message); });
+    return () => controller.abort();
+  }, [player.ended, repeat, player.seek, player.toggle, track.artist, track.id, selectTrack]);
 
   const playPause = useCallback(() => {
     if (!videoId) { setLinkOpen(true); return; }
@@ -142,6 +156,17 @@ export default function Home() {
     else if (player.error && !player.ready) setStarted(false);
     else player.toggle();
   }, [videoId, started, player.error, player.ready, player.toggle]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      if (event.code !== "Space" || event.repeat || (target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true']"))) return;
+      event.preventDefault();
+      playPause();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [playPause]);
 
   const seek = useCallback((time: number) => {
     if (!videoId) { setLinkOpen(true); return; }
@@ -166,7 +191,10 @@ export default function Home() {
     } catch { setPalette(defaultPalette); }
   }
 
-  if (!initialized) return <div className="starter-loading" role="status"><span className="starter-spinner" aria-hidden="true" /><span>Finding your first song...</span></div>;
+  if (!initialized) return <div className="starter-loading" role="status">
+    <span className="starter-spinner" aria-hidden="true" />
+    <span>Finding your first song...</span>
+  </div>;
 
   return <div className={`app-shell ${focusMode ? "is-focused" : ""}`}>
     <div className="wallpaper" aria-hidden="true" style={{

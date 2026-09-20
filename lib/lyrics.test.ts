@@ -13,7 +13,7 @@ test("random starters require multiple distinct timed vocal lines", () => {
   assert.equal(hasTimedLyrics({ syncedLyrics }, 15), false);
   assert.equal(hasTimedLyrics({ syncedLyrics: null }, 180), false);
 });
-import { chooseAudioVideo, type VideoCandidate } from "./video-match.ts";
+import { chooseAudioVideo, findAudioVideo, youtubeResultIdsFromHtml, type VideoCandidate } from "./video-match.ts";
 
 test("audio matching prefers album-length lyrics over music videos and altered recordings", () => {
   const video = (id: string, title: string, duration: string, embeddable = true): VideoCandidate => ({ id, snippet: { title }, contentDetails: { duration }, status: { embeddable } });
@@ -23,8 +23,17 @@ test("audio matching prefers album-length lyrics over music videos and altered r
     video("lyrics", "Song Lyrics", "PT3M21S"),
     video("blocked", "Song Official Audio", "PT3M20S", false),
   ], 200), "lyrics");
+  assert.equal(chooseAudioVideo([video("mv", "Song Official Music Video", "PT3M20S")], 200), "mv");
   assert.equal(chooseAudioVideo([video("long", "Song Lyrics", "PT1H3M20S"), video("audio", "Song Official Audio", "PT3M20S")], 200), "audio");
   assert.equal(chooseAudioVideo([], 200), null);
+});
+
+test("known soundtrack songs bypass YouTube search quota", async () => {
+  assert.equal(await findAudioVideo({ title: "Golden", artist: "HUNTR/X", duration: 197 }), "9_bTl2vvYQg");
+});
+
+test("YouTube results page IDs are deduplicated", () => {
+  assert.deepEqual(youtubeResultIdsFromHtml('{"videoId":"Din9kr5i3m4"},{"videoId":"Din9kr5i3m4"},{"videoId":"wfch4ECkeDI"}'), ["Din9kr5i3m4", "wfch4ECkeDI"]);
 });
 
 test("LRC timing preserves instrumental breaks, repeated stamps, fractions, and offsets", () => {
