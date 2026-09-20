@@ -11,16 +11,16 @@ type Props = {
   onPlayPause: () => void; onSeek: (time: number) => void;
   onVolume: (volume: number) => void; onRepeat: () => void;
   favorite: boolean; onFavorite: () => void;
-  focusMode: boolean; onFocusMode: () => void;
+  fullscreen: boolean; onFullscreen: () => void;
 };
 
-export function PlayerControls({ playing, buffering, currentTime, duration, volume, repeat, canSeek, onPlayPause, onSeek, onVolume, onRepeat, favorite, onFavorite, focusMode, onFocusMode }: Props) {
+export function PlayerControls({ playing, buffering, currentTime, duration, volume, repeat, canSeek, onPlayPause, onSeek, onVolume, onRepeat, favorite, onFavorite, fullscreen, onFullscreen }: Props) {
   const previousVolume = useRef(70);
   const progress = duration > 0 ? Math.min(100, currentTime / duration * 100) : 0;
 
   const transport = useMemo(() => <div className="transport">
-      <Glass className="focus-glass"><button className={`icon-button focus-button ${focusMode ? "selected" : ""}`} aria-label={focusMode ? "Exit focus mode" : "Enter focus mode"} title={focusMode ? "Exit focus mode" : "Focus mode"} aria-pressed={focusMode} onClick={onFocusMode}>
-        {focusMode ? <Minimize size={20} strokeWidth={1.6} /> : <Expand size={20} strokeWidth={1.6} />}
+      <Glass className="fullscreen-glass"><button className={`icon-button fullscreen-button ${fullscreen ? "selected" : ""}`} aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={fullscreen ? "Exit fullscreen" : "Fullscreen"} aria-pressed={fullscreen} onClick={onFullscreen}>
+        {fullscreen ? <Minimize size={20} strokeWidth={1.6} /> : <Expand size={20} strokeWidth={1.6} />}
       </button></Glass>
       <Glass className="repeat-glass">
       <button className={`icon-button repeat-button ${repeat ? "selected" : ""}`} title="Loop song" aria-label="Loop song" aria-pressed={repeat} onClick={onRepeat}>
@@ -40,7 +40,7 @@ export function PlayerControls({ playing, buffering, currentTime, duration, volu
           onChange={(event) => onVolume(Number(event.target.value))} style={{ "--range-progress": `${volume}%` } as CSSProperties} /></div></Glass></div>
       </div>
       <Glass className="favorite-glass"><button className={`icon-button favorite-button ${favorite ? "selected" : ""}`} title={favorite ? "Remove from favorites" : "Save to favorites"} aria-label={favorite ? "Remove from favorites" : "Save to favorites"} aria-pressed={favorite} onClick={onFavorite}><Heart size={20} fill={favorite ? "currentColor" : "none"} strokeWidth={1.6} /></button></Glass>
-    </div>, [playing, buffering, volume, repeat, favorite, focusMode, onPlayPause, onVolume, onRepeat, onFavorite, onFocusMode]);
+    </div>, [playing, buffering, volume, repeat, favorite, fullscreen, onPlayPause, onVolume, onRepeat, onFavorite, onFullscreen]);
 
   return <div className="player-controls" role="group" aria-label="Playback controls">
     {transport}

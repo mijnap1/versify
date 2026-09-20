@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowRight, ExternalLink, FolderHeart, Heart, Link2, X } from "lucide-react";
-import { Glass } from "@/components/Glass";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { ArrowRight, ExternalLink, Heart, Link2, X } from "lucide-react";
+import { MoreActions } from "@/components/MoreActions";
+import { Clock } from "@/components/Clock";
 import { SearchBar } from "@/components/SearchBar";
 import { LyricViewer } from "@/components/LyricViewer";
 import { PlayerControls } from "@/components/PlayerControls";
@@ -15,14 +16,17 @@ type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boo
 const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, loading: true, error: null };
 
 export default function Home() {
+  const [translating, setTranslating] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [loadingDismissed, setLoadingDismissed] = useState(false);
   const [track, setTrack] = useState<Track>(featuredTracks[0]);
   const [videoId, setVideoId] = useState<string | null>(featuredTracks[0].videoId!);
   const [started, setStarted] = useState(false);
   const [lyrics, setLyrics] = useState<LyricsState>(emptyLyrics);
   const [retry, setRetry] = useState(0);
   const [repeat, setRepeat] = useState(false);
-  const [focusMode, setFocusMode] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState("");
   const [favorites, setFavorites] = useState<Track[]>([]);
   const [storageError, setStorageError] = useState("");
   const favoritesDialog = useRef<HTMLDialogElement>(null);
@@ -176,9 +180,20 @@ export default function Home() {
 
   const retryLyrics = useCallback(() => setRetry((value) => value + 1), []);
   const toggleRepeat = useCallback(() => setRepeat((value) => !value), []);
-  const toggleFocus = useCallback(() => setFocusMode((value) => !value), []);
+  useEffect(() => {
+    const syncFullscreen = () => setFullscreen(!!document.fullscreenElement);
+    syncFullscreen();
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
+  const toggleFullscreen = useCallback(async () => {
+    setFullscreenError("");
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { setFullscreenError("Fullscreen is unavailable in this browser."); }
+  }, []);
   const saveCurrent = useCallback(() => toggleFavorite({ ...track, videoId: videoId ?? undefined }), [toggleFavorite, track, videoId]);
-  const favoritesTrigger = useMemo(() => <Glass className="favorites-trigger"><button className="icon-button" aria-label="Open favorites" title="Favorites" onClick={() => favoritesDialog.current?.showModal()}><FolderHeart size={20} strokeWidth={1.5} /></button></Glass>, []);
 
   function colorFromArtwork(image: HTMLImageElement) {
     const canvas = document.createElement("canvas");
@@ -191,22 +206,24 @@ export default function Home() {
     } catch { setPalette(defaultPalette); }
   }
 
-  if (!initialized) return <div className="starter-loading" role="status">
+  return <>
+    {!loadingDismissed && <div className={`starter-loading ${initialized ? "is-leaving" : ""}`} role="status" aria-hidden={initialized}
+      onTransitionEnd={(event) => { if (initialized && event.target === event.currentTarget && event.propertyName === "opacity") setLoadingDismissed(true); }}>
     <span className="starter-spinner" aria-hidden="true" />
     <span>Finding your first song...</span>
-  </div>;
+    </div>}
 
-  return <div className={`app-shell ${focusMode ? "is-focused" : ""}`}>
+  {initialized && <div className="app-shell">
     <div className="wallpaper" aria-hidden="true" style={{
       "--wallpaper-start": palette[0], "--wallpaper-middle": palette[1], "--wallpaper-end": palette[2],
     } as CSSProperties} />
 
-    <header className="search-position" inert={focusMode} aria-hidden={focusMode}><SearchBar onSelect={selectTrack} />
-      {favoritesTrigger}
+    <header className="search-position"><Clock /><SearchBar onSelect={selectTrack} />
+      <MoreActions onFavorites={() => favoritesDialog.current?.showModal()} translating={translating} onTranslate={() => setTranslating((value) => !value)} />
     </header>
 
     <main className="listening-room">
-      <section className="album-panel" aria-label="Current song" inert={focusMode} aria-hidden={focusMode}>
+      <section className="album-panel" aria-label="Current song">
         <div className={`record-scene ${player.playing ? "is-playing" : ""}`}>
           <div className="vinyl" aria-hidden="true">
             <img src="/vinyl.png" alt="" width={2000} height={2000} draggable={false} />
@@ -234,7 +251,7 @@ export default function Home() {
       <section className="lyrics-panel" aria-label="Lyrics">
         <LyricViewer lines={lyrics.lines} plainLyrics={lyrics.plain} active={activeLyricIndex(lyrics.lines, player.currentTime + offset)} offset={offset}
           loading={lyrics.loading} error={lyrics.error} instrumental={lyrics.instrumental} onSeek={seek}
-          onRetry={retryLyrics} canSeek={!matching} focusMode={focusMode} />
+          onRetry={retryLyrics} canSeek={!matching} fullscreen={fullscreen} translating={translating} />
       </section>
     </main>
 
@@ -242,7 +259,8 @@ export default function Home() {
       duration={player.duration || track.duration} volume={player.volume} repeat={repeat} canSeek={!!videoId && !matching}
       onPlayPause={playPause} onSeek={seek} onVolume={player.setVolume} onRepeat={toggleRepeat}
       favorite={isFavorite} onFavorite={saveCurrent}
-      focusMode={focusMode} onFocusMode={toggleFocus} />
+      fullscreen={fullscreen} onFullscreen={toggleFullscreen} />
+    {fullscreenError && <p className="audio-notice" role="alert">{fullscreenError}</p>}
 
     <footer className="site-credit"><small>&copy; 2026 Jamie Ryu</small></footer>
 
@@ -286,5 +304,6 @@ export default function Home() {
         <a className="find-on-youtube" href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${track.artist} ${track.title} official audio`)}`} target="_blank" rel="noreferrer">Find on YouTube <ExternalLink size={13} /></a>
       </form>
     </dialog>
-  </div>;
+  </div>}
+  </>;
 }

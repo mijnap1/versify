@@ -3,7 +3,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { ArrowUpLeft, LoaderCircle, Search, X } from "lucide-react";
 import type { Track } from "@/lib/tracks";
-import { Glass } from "./Glass";
 
 export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (track: Track) => void }) {
   const [query, setQuery] = useState("");
@@ -51,7 +50,7 @@ export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (trac
   }
 
   return <div className="search-root" ref={root}>
-    <Glass className="search-glass"><div className={`search-field ${visible ? "is-open" : ""}`}>
+    <div className={`search-field ${visible ? "is-open" : ""}`}>
       <Search size={17} strokeWidth={1.6} />
       <input ref={input} aria-label="Search songs or artists" placeholder="Find a song..." value={query}
         role="combobox" aria-expanded={visible} aria-controls={visible ? "track-results" : undefined} aria-autocomplete="list"
@@ -65,7 +64,7 @@ export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (trac
         }} />
       {loading ? <LoaderCircle size={16} className="animate-spin" /> : query &&
         <button className="icon-button small" aria-label="Clear search" title="Clear search" onClick={() => { setQuery(""); input.current?.focus(); }}><X size={15} /></button>}
-    </div></Glass>
+    </div>
     {visible && <div className="search-popover">
       {error && <p className="search-message" role="alert">{error}</p>}
       {loading && <p className="search-message" role="status">Searching...</p>}
