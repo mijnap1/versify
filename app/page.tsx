@@ -15,6 +15,7 @@ import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/art
 import { featuredTracks, type Track } from "@/lib/tracks";
 
 type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boolean; loading: boolean; error: string | null };
+type NextSong = { track: Track; lyrics: { syncedLyrics: string; plainLyrics: string | null } };
 const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, loading: true, error: null };
 
 export default function Home() {
@@ -38,6 +39,8 @@ export default function Home() {
   const [started, setStarted] = useState(false);
   const [lyrics, setLyrics] = useState<LyricsState>(emptyLyrics);
   const [retry, setRetry] = useState(0);
+  const [nextSong, setNextSong] = useState<{ forId: string; data?: NextSong; error?: string } | null>(null);
+  const consumedNext = useRef<string | null>(null);
   const [repeat, setRepeat] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState("");
@@ -152,21 +155,31 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!player.ended) return;
-    if (repeat) { player.seek(0); player.toggle(); return; }
-
+    if (!initialized || !started || repeat) return;
     const controller = new AbortController();
-    fetch(`/api/next?${new URLSearchParams({ artist: track.artist, exclude: track.id })}`, { signal: controller.signal })
+    consumedNext.current = null;
+    setNextSong(null);
+    fetch(`/api/next?${new URLSearchParams({ artist: track.artist, title: track.title, exclude: track.id })}`, { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
-        if (controller.signal.aborted) return;
-        selectTrack(data.track);
-        starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
+        if (!controller.signal.aborted) setNextSong({ forId: track.id, data });
       })
-      .catch((error: Error) => { if (!controller.signal.aborted) setMatchingError(error.message); });
+      .catch((error: Error) => { if (!controller.signal.aborted) setNextSong({ forId: track.id, error: error.message }); });
     return () => controller.abort();
-  }, [player.ended, repeat, player.seek, player.toggle, track.artist, track.id, selectTrack]);
+  }, [initialized, started, repeat, track.id, track.artist, track.title]);
+
+  useEffect(() => {
+    if (!player.ended) return;
+    if (repeat) { player.seek(0); player.toggle(); return; }
+    if (nextSong?.forId !== track.id || consumedNext.current === track.id) return;
+    if (nextSong.error) { setMatchingError(nextSong.error); return; }
+    if (!nextSong.data) return;
+    consumedNext.current = track.id;
+    const data = nextSong.data;
+    selectTrack(data.track);
+    starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
+  }, [player.ended, repeat, player.seek, player.toggle, track.id, nextSong, selectTrack]);
 
   const playPause = useCallback(() => {
     if (!videoId) { setLinkOpen(true); return; }
@@ -178,13 +191,14 @@ export default function Home() {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target;
-      if (event.code !== "Space" || event.repeat || (target instanceof HTMLElement && target.closest("input, textarea, select, button, [contenteditable='true']"))) return;
+      if (event.code !== "Space" || !initialized || event.altKey || event.ctrlKey || event.metaKey || (target instanceof HTMLElement && target.closest("input, textarea, select, summary, [contenteditable]:not([contenteditable='false']), dialog[open]"))) return;
       event.preventDefault();
+      if (event.repeat) return;
       playPause();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [playPause]);
+  }, [playPause, initialized]);
 
   const seek = useCallback((time: number) => {
     if (!videoId) { setLinkOpen(true); return; }
