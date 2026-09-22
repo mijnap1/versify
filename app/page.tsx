@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { ArrowRight, ExternalLink, Heart, Link2, X } from "lucide-react";
 import { MoreActions } from "@/components/MoreActions";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { LibraryPanel } from "@/components/LibraryPanel";
+import { isSavedTrack, readPlaylists, startPlaylist, nextPlaylistEntries, syncPlaylistQueue, nextRepeatMode, type RepeatMode, type Playlist, type PlaylistQueue } from "@/lib/playlists";
 import { defaultSettings, readSettings, languages, type Settings } from "@/lib/settings";
 import { Clock } from "@/components/Clock";
 import { SearchBar } from "@/components/SearchBar";
@@ -17,7 +19,7 @@ import { rememberSong, type PlayedSong } from "@/lib/playback-history";
 import { correctedVideoId } from "@/lib/video-match";
 
 type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boolean; loading: boolean; error: string | null };
-type NextSong = { track: Track; lyrics: { syncedLyrics: string; plainLyrics: string | null } };
+type NextSong = { track: Track; lyrics?: { syncedLyrics: string; plainLyrics: string | null } };
 const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, loading: true, error: null };
 
 export default function Home() {
@@ -50,13 +52,20 @@ export default function Home() {
   const [started, setStarted] = useState(false);
   const [lyrics, setLyrics] = useState<LyricsState>(emptyLyrics);
   const [retry, setRetry] = useState(0);
-  const [nextSong, setNextSong] = useState<{ forId: string; data?: NextSong; error?: string } | null>(null);
-  const consumedNext = useRef<string | null>(null);
+  const [playbackVersion, setPlaybackVersion] = useState(0);
+  const [queue, setQueue] = useState<PlaylistQueue | null>(null);
+  const [nextSong, setNextSong] = useState<{ version: number; queue: PlaylistQueue | null; repeat: boolean; data?: NextSong; queueIndex?: number; failed?: string[]; error?: string } | null>(null);
+  const consumedNext = useRef<number | null>(null);
   const recentSongs = useRef<PlayedSong[]>([]);
-  const [repeat, setRepeat] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
+  const repeat = repeatMode === "playlist" && !!queue;
+  const repeatSong = repeatMode === "song" || (repeatMode === "playlist" && !queue);
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState("");
   const [favorites, setFavorites] = useState<Track[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
+  const [playlistError, setPlaylistError] = useState("");
   const [storageError, setStorageError] = useState("");
   const [offset, setOffset] = useState(0);
   const [palette, setPalette] = useState<WallpaperPalette>(defaultPalette);
@@ -71,7 +80,7 @@ export default function Home() {
   const pendingSeek = useRef<number | null>(null);
   const videoRequest = useRef<AbortController | null>(null);
   const starterLyrics = useRef<{ id: string; data: LyricsState } | null>(null);
-  const player = useYouTubePlayer(started ? videoId : null);
+  const player = useYouTubePlayer(started ? videoId : null, playbackVersion);
   const isFavorite = favorites.some((saved) => saved.id === track.id);
 
   useEffect(() => {
@@ -91,15 +100,23 @@ export default function Home() {
   useEffect(() => {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem("verse-favorites") || "[]");
-      if (Array.isArray(saved)) setFavorites(saved.filter((item): item is Track =>
-        item && typeof item.id === "string" && typeof item.title === "string" && typeof item.artist === "string" &&
-        typeof item.album === "string" && typeof item.artwork === "string" && typeof item.duration === "number"));
+      if (Array.isArray(saved)) setFavorites(saved.filter(isSavedTrack));
     } catch { setStorageError("Saved songs could not be loaded in this browser."); }
+    try { setPlaylists(readPlaylists(JSON.parse(localStorage.getItem("verse-playlists") || "[]"))); }
+    catch { setPlaylistError("Playlists could not be loaded in this browser."); }
   }, []);
+
+  function updatePlaylists(next: Playlist[]) {
+    setPlaylists(next);
+    setQueue((current) => current?.id === "favorites" ? current : syncPlaylistQueue(current, next.find((item) => item.id === current?.id)));
+    try { localStorage.setItem("verse-playlists", JSON.stringify(next)); setPlaylistError(""); }
+    catch { setPlaylistError("Playlists are available for this session only. Browser storage is unavailable."); }
+  }
 
   const toggleFavorite = useCallback((song: Track) => {
     const next = favorites.some((saved) => saved.id === song.id) ? favorites.filter((saved) => saved.id !== song.id) : [song, ...favorites];
     setFavorites(next);
+    setQueue((current) => current?.id === "favorites" ? syncPlaylistQueue(current, { id: "favorites", name: "Favorites", tracks: next }) : current);
     try { localStorage.setItem("verse-favorites", JSON.stringify(next)); setStorageError(""); }
     catch { setStorageError("Favorites are available for this session only. Browser storage is unavailable."); }
   }, [favorites]);
@@ -157,43 +174,81 @@ export default function Home() {
     else linkDialog.current?.close();
   }, [linkOpen]);
 
-  const selectTrack = useCallback((next: Track) => {
+  const selectTrack = useCallback((next: Track, playlistQueue: PlaylistQueue | null = null) => {
     next = { ...next, videoId: correctedVideoId(next.videoId) };
     starterLyrics.current = null;
     videoRequest.current?.abort();
     setStarted(true); setVideoId(next.videoId ?? null); setMatching(!next.videoId); pendingSeek.current = null;
     setTrack(next); setOffset(0); setLinkOpen(false); setMatchingError(null);
     setArtworkFailed(false); setLink(""); setLinkError("");
+    setQueue(playlistQueue); setPlaybackVersion((value) => value + 1);
   }, []);
 
-  useEffect(() => {
-    if (!initialized || !started || repeat) return;
-    const controller = new AbortController();
-    consumedNext.current = null;
-    setNextSong(null);
-    recentSongs.current = rememberSong(recentSongs.current, track);
-    fetch("/api/next", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artist: track.artist, title: track.title, exclude: track.id, recent: recentSongs.current }), signal: controller.signal })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        if (!controller.signal.aborted) setNextSong({ forId: track.id, data });
-      })
-      .catch((error: Error) => { if (!controller.signal.aborted) setNextSong({ forId: track.id, error: error.message }); });
-    return () => controller.abort();
-  }, [initialized, started, repeat, track.id, track.artist, track.title]);
+  function playPlaylist(playlist: Playlist, shuffle = false, startId?: string) {
+    const next = startPlaylist(playlist, shuffle, startId);
+    if (!next.tracks.length) return;
+    selectTrack(next.tracks[next.index], next);
+    closePanel();
+  }
 
   useEffect(() => {
-    if (!player.ended) return;
-    if (repeat) { player.seek(0); player.toggle(); return; }
-    if (nextSong?.forId !== track.id || consumedNext.current === track.id) return;
+    if (!initialized || !started || (repeatSong && !queue)) return;
+    const controller = new AbortController();
+    setNextSong(null);
+    recentSongs.current = rememberSong(recentSongs.current, track);
+    const context = { version: playbackVersion, queue, repeat };
+    async function prepareNext() {
+      if (queue) {
+        const failed = [...queue.failed];
+        for (const entry of nextPlaylistEntries(queue, repeat)) {
+          controller.signal.throwIfAborted();
+          const song = { ...entry.track, videoId: correctedVideoId(entry.track.videoId) };
+          try {
+            if (!song.videoId) {
+              const response = await fetch(`/api/video?${new URLSearchParams({ title: song.title, artist: song.artist, duration: String(song.duration) })}`,
+                { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]) });
+              if (!response.ok) throw new Error("Audio unavailable");
+              song.videoId = (await response.json()).videoId;
+            }
+            if (!song.videoId) throw new Error("Audio unavailable");
+          } catch { controller.signal.throwIfAborted(); failed.push(song.id); continue; }
+          const params = new URLSearchParams({ title: song.title, artist: song.artist, album: song.album, duration: String(song.duration) });
+          const lyrics = await fetch(`/api/lyrics?${params}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(6000)]) })
+            .then((response) => response.ok ? response.json() : undefined).catch(() => undefined);
+          if (!controller.signal.aborted) setNextSong({ ...context, data: { track: song, lyrics }, queueIndex: entry.index, failed });
+          return;
+        }
+        if (repeat) throw new Error("No playable songs left in this playlist. Try another playlist or turn off loop.");
+      }
+      const response = await fetch("/api/next", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist: track.artist, title: track.title, exclude: track.id, recent: recentSongs.current }), signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+        if (!controller.signal.aborted) setNextSong({ ...context, data });
+    }
+    prepareNext().catch((error: Error) => { if (!controller.signal.aborted) setNextSong({ ...context, error: error.message }); });
+    return () => controller.abort();
+  }, [initialized, started, repeat, repeatSong, track.id, track.artist, track.title, queue, playbackVersion]);
+
+  useEffect(() => {
+    if (queue && (player.error || (!matching && matchingError && !videoId)) && !queue.failed.includes(track.id)) setQueue({ ...queue, failed: [...queue.failed, track.id] });
+  }, [player.error, queue, track.id, matching, matchingError, videoId]);
+
+  const advanceSong = useCallback(() => {
+    if (nextSong?.version !== playbackVersion || nextSong.queue !== queue || nextSong.repeat !== repeat || consumedNext.current === playbackVersion) return;
     if (nextSong.error) { setMatchingError(nextSong.error); return; }
     if (!nextSong.data) return;
-    consumedNext.current = track.id;
+    consumedNext.current = playbackVersion;
     const data = nextSong.data;
-    selectTrack(data.track);
-    starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
-  }, [player.ended, repeat, player.seek, player.toggle, track.id, nextSong, selectTrack]);
+    selectTrack(data.track, queue && nextSong.queueIndex !== undefined ? { ...queue, index: nextSong.queueIndex, failed: nextSong.failed ?? queue.failed } : null);
+    if (data.lyrics) starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics || ""), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
+  }, [nextSong, playbackVersion, queue, repeat, selectTrack]);
+
+  useEffect(() => {
+    if (!player.ended && !(queue && (player.error || (!matching && matchingError && !videoId)))) return;
+    if (player.ended && repeatSong) { player.seek(0); player.toggle(); return; }
+    advanceSong();
+  }, [player.ended, player.error, repeatSong, player.seek, player.toggle, queue, matching, matchingError, videoId, advanceSong]);
 
   const playPause = useCallback(() => {
     if (!videoId) { setLinkOpen(true); return; }
@@ -221,7 +276,7 @@ export default function Home() {
   }, [videoId, player.ready, player.seek]);
 
   const retryLyrics = useCallback(() => setRetry((value) => value + 1), []);
-  const toggleRepeat = useCallback(() => setRepeat((value) => !value), []);
+  const toggleRepeat = useCallback(() => setRepeatMode((value) => nextRepeatMode(value, !!queue)), [queue]);
   useEffect(() => {
     const syncFullscreen = () => setFullscreen(!!document.fullscreenElement);
     syncFullscreen();
@@ -300,20 +355,16 @@ export default function Home() {
         {(["favorites", "settings"] as const).map((panel) => <div key={panel}
           className={`panel-view library-view ${activePanel === panel ? "is-active" : ""}`}
           inert={activePanel !== panel} aria-hidden={activePanel !== panel} aria-labelledby={`${panel}-title`} role="region">
-          <div className="panel-heading"><h2 id={`${panel}-title`} tabIndex={-1}>{panel === "favorites" ? "Favorites" : "Settings"}</h2>
-            <button className="icon-button" aria-label={`Close ${panel}`} onClick={closePanel}><X size={19} /></button>
+          <div className="panel-heading"><h2 id={`${panel}-title`} tabIndex={-1}>{panel === "favorites" ? "Library" : "Settings"}</h2>
+            <button className="icon-button" aria-label={`Close ${panel === "favorites" ? "library" : panel}`} onClick={closePanel}><X size={19} /></button>
           </div>
           <div className="panel-content">
             {panel === "settings" ? <SettingsPanel settings={settings} onChange={updateSettings} error={settingsError} /> : <>
               {storageError && <p role="alert">{storageError}</p>}
-              {!favorites.length && <p className="panel-empty">No saved songs yet.</p>}
-              <ul className="favorites-list">{favorites.map((song) => <li key={song.id}>
-                <button className="search-result" onClick={() => { selectTrack(song); closePanel(); }}>
-                  {song.artwork && <img src={song.artwork} alt="" width={42} height={42} />}
-                  <span className="result-copy"><strong>{song.title}</strong><span>{song.artist}</span></span>
-                </button>
-                <button className="icon-button favorite-button selected" aria-label={`Remove ${song.title} from favorites`} title="Remove from favorites" onClick={() => toggleFavorite(song)}><Heart size={18} fill="currentColor" /></button>
-              </li>)}</ul>
+              {playlistError && <p role="alert">{playlistError}</p>}
+              <LibraryPanel playlists={playlists} favorites={favorites} current={{ ...track, videoId: videoId ?? undefined }}
+                playingId={started ? track.id : undefined} playing={player.playing && activePanel === "favorites"} selected={selectedPlaylist} onSelect={setSelectedPlaylist}
+                onChange={updatePlaylists} onFavorite={toggleFavorite} onPlay={playPlaylist} />
             </>}
           </div>
         </div>)}
@@ -321,10 +372,12 @@ export default function Home() {
     </main>
 
     <PlayerControls playing={player.playing} buffering={player.buffering || matching} currentTime={player.currentTime}
-      duration={player.duration || track.duration} volume={player.volume} repeat={repeat} canSeek={!!videoId && !matching}
+      duration={player.duration || track.duration} volume={player.volume} repeat={repeatSong ? "song" : repeat ? "playlist" : "off"} canSeek={!!videoId && !matching}
       onPlayPause={playPause} onSeek={seek} onVolume={player.setVolume} onRepeat={toggleRepeat}
       favorite={isFavorite} onFavorite={saveCurrent}
-      fullscreen={fullscreen} onFullscreen={toggleFullscreen} />
+      fullscreen={fullscreen} onFullscreen={toggleFullscreen}
+      playlistName={queue?.name} onOpenPlaylist={() => { setSelectedPlaylist(queue?.id ?? null); setActivePanel("favorites"); }}
+      onNext={advanceSong} canNext={nextSong?.version === playbackVersion && nextSong.queue === queue && nextSong.repeat === repeat && !!nextSong.data} />
     {fullscreenError && <p className="audio-notice" role="alert">{fullscreenError}</p>}
 
     <footer className="site-credit"><small>&copy; 2026 Jamie Ryu</small></footer>

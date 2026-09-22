@@ -31,7 +31,7 @@ export function MoreActions({ onSettings, languageName, onFavorites, translating
       aria-expanded={open} aria-controls="extra-actions" onClick={() => setOpen(!open)}><MoreHorizontal size={21} strokeWidth={1.5} /></button>
     <div id="extra-actions" className="more-items" inert={!open} aria-hidden={!open}>
       <button className="icon-button" aria-label="Open settings" title="Settings" onClick={() => { trigger.current?.focus(); setOpen(false); onSettings(); }}><Settings2 size={20} strokeWidth={1.5} /></button>
-      <button className="icon-button" aria-label="Open favorites" title="Favorites" onClick={() => { trigger.current?.focus(); setOpen(false); onFavorites(); }}>
+      <button className="icon-button" aria-label="Open library" title="Library" onClick={() => { trigger.current?.focus(); setOpen(false); onFavorites(); }}>
         <FolderHeart size={20} strokeWidth={1.5} />
       </button>
       <button className="icon-button" aria-label={`Show ${languageName} translation`} title={`${languageName} translation`} aria-pressed={translating} onClick={onTranslate}><Languages size={20} strokeWidth={1.5} /></button>

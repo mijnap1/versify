@@ -22,7 +22,7 @@ function loadSDK() {
   return sdkPromise;
 }
 
-export function useYouTubePlayer(videoId: string | null) {
+export function useYouTubePlayer(videoId: string | null, playbackVersion = 0) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -33,9 +33,11 @@ export function useYouTubePlayer(videoId: string | null) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(70);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState({ videoId, playbackVersion });
   const volumeRef = useRef(volume);
 
   useEffect(() => {
+    setLoaded({ videoId, playbackVersion });
     setReady(false); setPlaying(false); setCurrentTime(0); setDuration(0); setError(null); setEnded(false);
     if (!videoId) { setBuffering(false); return; }
     let cancelled = false;
@@ -102,7 +104,7 @@ export function useYouTubePlayer(videoId: string | null) {
       });
     }).catch((error: Error) => { if (!cancelled) { setError(error.message); setBuffering(false); } });
     return () => { cancelled = true; document.removeEventListener("visibilitychange", updatePolling); clearInterval(interval); clearTimeout(readyTimeout); playerRef.current = null; player?.destroy(); };
-  }, [videoId]);
+  }, [videoId, playbackVersion]);
 
   const toggle = useCallback(() => {
     if (!ready) return;
@@ -117,5 +119,6 @@ export function useYouTubePlayer(videoId: string | null) {
   const setVolume = useCallback((value: number) => {
     volumeRef.current = value; setVolumeState(value); playerRef.current?.setVolume(value);
   }, []);
-  return { containerRef, playing, ready, buffering, ended, currentTime, duration, volume, error, toggle, seek, setVolume };
+  const current = loaded.videoId === videoId && loaded.playbackVersion === playbackVersion;
+  return { containerRef, playing: current && playing, ready: current && ready, buffering, ended: current && ended, currentTime, duration, volume, error: current ? error : null, toggle, seek, setVolume };
 }
