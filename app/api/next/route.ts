@@ -3,7 +3,7 @@ import { hasTimedLyrics } from "@/lib/starter";
 import { type Track } from "@/lib/tracks";
 import { findAudioVideo } from "@/lib/video-match";
 
-import { discoverGenreSongs } from "@/lib/recommendations";
+import { discoverGenreSongs, variedRecommendations } from "@/lib/recommendations";
 import { validHistory, wasRecentlyPlayed } from "@/lib/playback-history";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
 
   let candidates: Track[] = [];
   try {
-    candidates = (await discoverGenreSongs(artist, exclude, title))
+    const related = (await discoverGenreSongs(artist, exclude, title)).filter((song) => !wasRecentlyPlayed({ id: String(song.trackId), title: song.trackName, artist: song.artistName }, recent));
+    candidates = variedRecommendations(related, recent.map((song) => song.artist))
       .map((song) => ({
         id: String(song.trackId), title: song.trackName, artist: song.artistName, album: song.collectionName,
         duration: song.trackTimeMillis / 1000, year: song.releaseDate?.slice(0, 4),
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     return { track: { ...track, videoId }, lyrics: { syncedLyrics: lyrics.syncedLyrics, plainLyrics: lyrics.plainLyrics ?? null, instrumental: false } };
   }
   try {
-    // Prepare three at a time, but prefer chart rank over network response speed.
+    // Preserve the weighted selection order rather than favoring the fastest response.
     while (queue.length && !signal.aborted) {
       const results = await Promise.allSettled(queue.splice(0, 3).map(prepare));
       const next = results.find((result) => result.status === "fulfilled");

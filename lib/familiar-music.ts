@@ -15,12 +15,26 @@ export const familiarHits: Record<string, [artist: string, title: string][]> = {
 };
 
 export const musicKey = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+const japaneseArtistAliases = [
+  ["Kenshi Yonezu", "米津玄師"], ["Yorushika", "ヨルシカ"],
+  ["Official HIGE DANdism", "Official髭男dism"], ["Fujii Kaze", "藤井風"],
+  ["Aimyon", "あいみょん"], ["Yuuri", "優里"], ["Vaundy"], ["YOASOBI"], ["Ado"],
+];
+export function artistKey(artist: string) {
+  return musicKey(japaneseArtistAliases.find((aliases) => aliases.some((alias) => musicKey(alias) === musicKey(artist)))?.[0] ?? artist);
+}
+export function isJapanesePopArtist(artist: string) {
+  return japaneseArtistAliases.some(([name]) => artistKey(name) === artistKey(artist));
+}
+export function isJapanesePopGenre(genre: string | undefined, artist: string) {
+  return musicKey(genre ?? "") === "jpop" || (isJapanesePopArtist(artist) && ["rock", "pop", "alternative", "anime"].includes(musicKey(genre ?? "")));
+}
 export function hitsForGenre(genre: string) {
   const key = musicKey(genre);
   return familiarHits[key === "cpop" ? "mandopop" : key] ?? [];
 }
 
 export function familiarityScore(genre: string, artist: string, title: string) {
-  const hits = hitsForGenre(genre).filter(([name]) => musicKey(name) === musicKey(artist));
+  const hits = hitsForGenre(genre).filter(([name]) => artistKey(name) === artistKey(artist));
   return hits.some(([, hit]) => musicKey(hit) === musicKey(title)) ? 8 : hits.length ? 4 : 0;
 }

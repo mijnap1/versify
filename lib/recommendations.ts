@@ -1,4 +1,5 @@
-import { familiarityScore, hitsForGenre, musicKey } from "./familiar-music.ts";
+import { artistKey, familiarityScore, hitsForGenre, isJapanesePopGenre, musicKey } from "./familiar-music.ts";
+import { isBackingTrack } from "./video-match.ts";
 
 type Genre = { id: string; name: string; subgenres?: Record<string, Genre> };
 export type CatalogSong = { kind: string; trackId: number; trackName: string; artistName: string; artistId?: number; collectionName: string; trackTimeMillis: number; primaryGenreName?: string; releaseDate?: string; artworkUrl100?: string; popularity?: number };
@@ -10,6 +11,21 @@ export function rankPopularSongs(songs: CatalogSong[]): CatalogSong[] {
     ranked.set(song.trackId, { ...song, popularity: (existing?.popularity ?? 0) + (song.popularity ?? 0) });
   }
   return [...ranked.values()].sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0));
+}
+
+// Weighted sampling varies each session while keeping familiar/charting songs more likely.
+export function variedRecommendations(songs: CatalogSong[], recentArtists: string[], random = Math.random): CatalogSong[] {
+  const recent = new Set(recentArtists.slice(-4).map(artistKey));
+  const shuffled = songs.slice(0, 60).map((song) => ({ song,
+    rank: -Math.log(Math.max(Number.EPSILON, 1 - random())) / ((1 + Math.sqrt(Math.max(0, song.popularity ?? 0)) * 3) * (recent.has(artistKey(song.artistName)) ? .2 : 1)),
+  })).sort((a, b) => a.rank - b.rank);
+  const artists = new Set<string>();
+  const unique: CatalogSong[] = [], rest: CatalogSong[] = [];
+  for (const { song } of shuffled) {
+    const artist = artistKey(song.artistName);
+    (artists.has(artist) ? rest : unique).push(song); artists.add(artist);
+  }
+  return [...unique, ...rest];
 }
 
 async function chartRanks(genreId: string, country: string): Promise<string[]> {
@@ -47,7 +63,7 @@ export function matchesGenre(candidate: string | undefined, genre: string) {
 }
 
 export function otherArtist(candidate: string, artist: string) {
-  return candidate.trim().toLowerCase() !== artist.trim().toLowerCase();
+  return artistKey(candidate) !== artistKey(artist);
 }
 
 export function genreMarkets(genre: string): string[] {
@@ -118,7 +134,7 @@ export async function discoverGenreSongs(artist: string, exclude?: string, title
     const seen = new Set<number>();
     return rankPopularSongs(results.flatMap((result) => result.status === "fulfilled" ? result.value ?? [] : []).filter((song) => {
       if (song.kind !== "song" || seen.has(song.trackId) || String(song.trackId) === exclude || !otherArtist(song.artistName, artist)
-        || !isKoreanBalladArtist(song.artistName) || /instrumental|karaoke|\(mr\)/i.test(song.trackName)
+        || !isKoreanBalladArtist(song.artistName) || isBackingTrack(song.trackName, song.artistName)
         || song.trackTimeMillis <= 60000 || song.trackTimeMillis >= 600000) return false;
       seen.add(song.trackId); return true;
     }).map((song) => ({ ...song, popularity: ranks.reduce((score, result, market) => {
@@ -127,7 +143,8 @@ export async function discoverGenreSongs(artist: string, exclude?: string, title
     }, 0) })));
   }
   const genres = await catalog("https://itunes.apple.com/WebObjects/MZStoreServices.woa/ws/genres?id=34");
-  const genre = findGenre(genres, current.primaryGenreName);
+  const japanesePop = isJapanesePopGenre(current.primaryGenreName, current.artistName);
+  const genre = findGenre(genres, japanesePop ? "J-Pop" : current.primaryGenreName);
   if (!genre || !/^\d+$/.test(genre.id)) return [];
 
   const hits = hitsForGenre(genre.name).filter(([name]) => otherArtist(name, artist));
@@ -135,7 +152,7 @@ export async function discoverGenreSongs(artist: string, exclude?: string, title
   const familiar = Promise.allSettled([...hits.slice(offset), ...hits.slice(0, offset)].slice(0, 4).map(async ([name, title]) => {
     const query = new URLSearchParams({ term: `${name} ${title}`, entity: "song", limit: "8", country: genreMarkets(genre.name)[0] });
     const songs: CatalogSong[] = (await catalog(`https://itunes.apple.com/search?${query}`)).results ?? [];
-    return songs.filter((song) => musicKey(song.artistName) === musicKey(name) && musicKey(song.trackName) === musicKey(title));
+    return songs.filter((song) => artistKey(song.artistName) === artistKey(name) && musicKey(song.trackName) === musicKey(title));
   }));
 
   // The same discovery path works for every catalog genre, including subgenres.
@@ -158,7 +175,8 @@ export async function discoverGenreSongs(artist: string, exclude?: string, title
     const id = String(song.trackId);
     if (song.kind !== "song" || id === exclude || seen.has(id) || !otherArtist(song.artistName, artist)
       || (current?.artistId !== undefined && song.artistId === current.artistId)
-      || !matchesGenre(song.primaryGenreName, genre.name)
+      || !(japanesePop ? isJapanesePopGenre(song.primaryGenreName, song.artistName) : matchesGenre(song.primaryGenreName, genre.name))
+      || isBackingTrack(song.trackName ?? "", song.artistName)
       || isKoreanBalladArtist(song.artistName)
       || song.trackTimeMillis <= 60000 || song.trackTimeMillis >= 600000) return false;
     seen.add(id);

@@ -9,6 +9,15 @@ export type VideoCandidate = {
 
 const normalized = (text: string) => text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 
+export function isBackingTrack(title: string, channel = "") {
+  return /karaoke|instrumental|\binst\b|\bmr\b|backing track|off[\s-]*vocal|without vocals|노래방|반주|カラオケ|伴奏|금영|tj\s*미디어/i.test(`${title} ${channel}`);
+}
+
+function verifiedBalladAudio(track: { title: string; artist: string }) {
+  return ["사랑하지않아서그랬어", "becauseidontloveyou"].includes(normalized(track.title))
+    && ["onestar", "임한별"].includes(normalized(track.artist)) ? "T_MhUFvlq6g" : null;
+}
+
 export function chooseAudioVideo(videos: VideoCandidate[], duration: number, track?: { title: string; artist: string }): string | null {
   const ranked = videos.filter((video) => video.status?.embeddable).map((video) => {
     const title = video.snippet.title.toLowerCase();
@@ -16,6 +25,7 @@ export function chooseAudioVideo(videos: VideoCandidate[], duration: number, tra
     const seconds = match ? Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0) : 0;
     const difference = duration > 0 && seconds > 0 ? Math.abs(seconds - duration) : 0;
     if (!seconds || (duration > 0 && difference > 5)) return null;
+    if (isBackingTrack(title, video.snippet.channelTitle)) return null;
     if (/music video|official video|\bm\/?v\b|movie clip|song scene|extended version/i.test(title)) return null;
     if (/\blive\b|\bcover\b|\bremix\b|slowed|sped up|nightcore|karaoke|reaction|instrumental|acoustic|demo version/i.test(title)
       && !/\blive\b|remix|instrumental|acoustic/i.test(track?.title ?? "")) return null;
@@ -37,6 +47,8 @@ export function chooseAudioVideo(videos: VideoCandidate[], duration: number, tra
 }
 
 function knownAudioVideo(track: { title: string; artist: string }) {
+  const ballad = verifiedBalladAudio(track);
+  if (ballad) return ballad;
   const title = track.title.toLowerCase();
   const artist = track.artist.toLowerCase();
   if (title === "golden" && (artist.includes("huntr/x") || artist.includes("kpop demon hunters"))) return "9_bTl2vvYQg";
@@ -45,7 +57,9 @@ function knownAudioVideo(track: { title: string; artist: string }) {
   return null;
 }
 
-export function correctedVideoId(id: string | undefined) {
+export function correctedVideoId(id: string | undefined, track?: { title: string; artist: string }) {
+  const ballad = track && verifiedBalladAudio(track);
+  if (ballad) return ballad;
   const replacements: Record<string, string> = { "87gWaABqGYs": "XjHr-6Zl5P8", "QGsevnbItdU": "5TCOCqw1A58", "tzFadK-XJ8g": "5TCOCqw1A58", "7vCK0VBuQLs": "5TCOCqw1A58", "zWC9EOtuFY4": "5TCOCqw1A58" };
   return id ? replacements[id] ?? id : undefined;
 }

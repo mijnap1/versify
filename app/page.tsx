@@ -175,7 +175,7 @@ export default function Home() {
   }, [linkOpen]);
 
   const selectTrack = useCallback((next: Track, playlistQueue: PlaylistQueue | null = null) => {
-    next = { ...next, videoId: correctedVideoId(next.videoId) };
+    next = { ...next, videoId: correctedVideoId(next.videoId, next) };
     starterLyrics.current = null;
     videoRequest.current?.abort();
     setStarted(true); setVideoId(next.videoId ?? null); setMatching(!next.videoId); pendingSeek.current = null;
@@ -202,7 +202,7 @@ export default function Home() {
         const failed = [...queue.failed];
         for (const entry of nextPlaylistEntries(queue, repeat)) {
           controller.signal.throwIfAborted();
-          const song = { ...entry.track, videoId: correctedVideoId(entry.track.videoId) };
+          const song = { ...entry.track, videoId: correctedVideoId(entry.track.videoId, entry.track) };
           try {
             if (!song.videoId) {
               const response = await fetch(`/api/video?${new URLSearchParams({ title: song.title, artist: song.artist, duration: String(song.duration) })}`,
