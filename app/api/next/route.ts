@@ -4,43 +4,29 @@ import { type Track } from "@/lib/tracks";
 import { findAudioVideo } from "@/lib/video-match";
 
 import { discoverGenreSongs } from "@/lib/recommendations";
+import { validHistory, wasRecentlyPlayed } from "@/lib/playback-history";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 45;
 
-function shuffled<T>(items: T[]): T[] {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
-
-export async function GET(request: NextRequest) {
-  const artist = request.nextUrl.searchParams.get("artist")?.trim();
-  const title = request.nextUrl.searchParams.get("title")?.trim();
-  const exclude = request.nextUrl.searchParams.get("exclude")?.trim();
-  if (!artist || artist.length > 150 || (title?.length ?? 0) > 250 || (exclude?.length ?? 0) > 100) return NextResponse.json({ error: "Current artist is unavailable." }, { status: 400 });
+export async function POST(request: NextRequest) {
+  let body;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid next-song request." }, { status: 400 }); }
+  const { artist, title, exclude, recent = [] } = body ?? {};
+  if (typeof artist !== "string" || !artist.trim() || artist.length > 150 || typeof title !== "string" || title.length > 250
+    || typeof exclude !== "string" || exclude.length > 100 || !validHistory(recent)) return NextResponse.json({ error: "Invalid next-song request." }, { status: 400 });
 
   let candidates: Track[] = [];
   try {
-    candidates = shuffled(await discoverGenreSongs(artist, exclude, title))
+    candidates = (await discoverGenreSongs(artist, exclude, title))
       .map((song) => ({
         id: String(song.trackId), title: song.trackName, artist: song.artistName, album: song.collectionName,
         duration: song.trackTimeMillis / 1000, year: song.releaseDate?.slice(0, 4),
         artwork: song.artworkUrl100 ? `/api/artwork?url=${encodeURIComponent(song.artworkUrl100.replace("100x100bb", "600x600bb"))}` : "",
-      }));
+      })).filter((song) => !wasRecentlyPlayed(song, recent));
   } catch { /* Report no related song rather than jumping to an unrelated starter. */ }
 
-  // Try different artists first, before alternate recordings from the same artist.
-  const artists = new Set<string>();
-  const first = candidates.filter((song) => {
-    const name = song.artist.toLowerCase();
-    if (artists.has(name)) return false;
-    artists.add(name); return true;
-  });
-  const queue = [...first, ...candidates.filter((song) => !first.includes(song))].slice(0, 12);
+  const queue = candidates.slice(0, 12);
   const controller = new AbortController();
   const deadline = AbortSignal.timeout(18000);
   const signal = AbortSignal.any([controller.signal, request.signal, deadline]);
@@ -53,19 +39,16 @@ export async function GET(request: NextRequest) {
     if (!hasTimedLyrics(lyrics, track.duration)) throw new Error("Untimed lyrics");
     const videoId = await findAudioVideo(track, candidateSignal);
     if (!videoId) throw new Error("Audio unavailable");
+    if (wasRecentlyPlayed({ ...track, videoId }, recent)) throw new Error("Recently played recording");
     return { track: { ...track, videoId }, lyrics: { syncedLyrics: lyrics.syncedLyrics, plainLyrics: lyrics.plainLyrics ?? null, instrumental: false } };
   }
-  // Three workers skip failures independently; return the first fully prepared song.
-  async function worker() {
-    while (queue.length && !signal.aborted) {
-      const track = queue.shift()!;
-      try { return await prepare(track); } catch { /* Try another candidate. */ }
-    }
-    throw new Error("No related song available");
-  }
   try {
-    const next = await Promise.any([worker(), worker(), worker()]);
-    return NextResponse.json(next, { headers: { "Cache-Control": "no-store" } });
+    // Prepare three at a time, but prefer chart rank over network response speed.
+    while (queue.length && !signal.aborted) {
+      const results = await Promise.allSettled(queue.splice(0, 3).map(prepare));
+      const next = results.find((result) => result.status === "fulfilled");
+      if (next?.status === "fulfilled") return NextResponse.json(next.value, { headers: { "Cache-Control": "no-store" } });
+    }
   } catch { /* All candidates failed. */ }
   finally { controller.abort(); }
 

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight, ExternalLink, Heart, Link2, X } from "lucide-react";
 import { MoreActions } from "@/components/MoreActions";
-import { SettingsDialog } from "@/components/SettingsDialog";
+import { SettingsPanel } from "@/components/SettingsPanel";
 import { defaultSettings, readSettings, languages, type Settings } from "@/lib/settings";
 import { Clock } from "@/components/Clock";
 import { SearchBar } from "@/components/SearchBar";
@@ -13,6 +13,8 @@ import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { activeLyricIndex, parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
 import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
 import { featuredTracks, type Track } from "@/lib/tracks";
+import { rememberSong, type PlayedSong } from "@/lib/playback-history";
+import { correctedVideoId } from "@/lib/video-match";
 
 type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boolean; loading: boolean; error: string | null };
 type NextSong = { track: Track; lyrics: { syncedLyrics: string; plainLyrics: string | null } };
@@ -21,7 +23,16 @@ const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, 
 export default function Home() {
   const [settings, setSettings] = useState(defaultSettings);
   const [settingsError, setSettingsError] = useState("");
-  const settingsDialog = useRef<HTMLDialogElement>(null);
+  const [activePanel, setActivePanel] = useState<"lyrics" | "favorites" | "settings">("lyrics");
+  const panelRef = useRef<HTMLElement>(null);
+  function closePanel() {
+    setActivePanel("lyrics");
+    document.querySelector<HTMLButtonElement>(".more-trigger")?.focus({ preventScroll: true });
+  }
+  useEffect(() => {
+    panelRef.current?.querySelectorAll("details").forEach((element) => { element.open = false; });
+    if (activePanel !== "lyrics") panelRef.current?.querySelector<HTMLElement>(".panel-view.is-active h2")?.focus({ preventScroll: true });
+  }, [activePanel]);
   useEffect(() => {
     try { setSettings(readSettings(JSON.parse(localStorage.getItem("verse-settings") || "{}"))); }
     catch { setSettingsError("Settings could not be restored."); }
@@ -41,12 +52,12 @@ export default function Home() {
   const [retry, setRetry] = useState(0);
   const [nextSong, setNextSong] = useState<{ forId: string; data?: NextSong; error?: string } | null>(null);
   const consumedNext = useRef<string | null>(null);
+  const recentSongs = useRef<PlayedSong[]>([]);
   const [repeat, setRepeat] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState("");
   const [favorites, setFavorites] = useState<Track[]>([]);
   const [storageError, setStorageError] = useState("");
-  const favoritesDialog = useRef<HTMLDialogElement>(null);
   const [offset, setOffset] = useState(0);
   const [palette, setPalette] = useState<WallpaperPalette>(defaultPalette);
   const [artworkFailed, setArtworkFailed] = useState(false);
@@ -147,6 +158,7 @@ export default function Home() {
   }, [linkOpen]);
 
   const selectTrack = useCallback((next: Track) => {
+    next = { ...next, videoId: correctedVideoId(next.videoId) };
     starterLyrics.current = null;
     videoRequest.current?.abort();
     setStarted(true); setVideoId(next.videoId ?? null); setMatching(!next.videoId); pendingSeek.current = null;
@@ -159,7 +171,9 @@ export default function Home() {
     const controller = new AbortController();
     consumedNext.current = null;
     setNextSong(null);
-    fetch(`/api/next?${new URLSearchParams({ artist: track.artist, title: track.title, exclude: track.id })}`, { signal: controller.signal })
+    recentSongs.current = rememberSong(recentSongs.current, track);
+    fetch("/api/next", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artist: track.artist, title: track.title, exclude: track.id, recent: recentSongs.current }), signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error);
@@ -247,7 +261,7 @@ export default function Home() {
     } as CSSProperties} />
 
     <header className="search-position"><Clock hour12={settings.hour12} /><SearchBar onSelect={selectTrack} />
-      <MoreActions onSettings={() => settingsDialog.current?.showModal()} languageName={languages[settings.language]} onFavorites={() => favoritesDialog.current?.showModal()} translating={translating} onTranslate={() => setTranslating((value) => !value)} />
+      <MoreActions onSettings={() => setActivePanel("settings")} languageName={languages[settings.language]} onFavorites={() => setActivePanel("favorites")} translating={translating} onTranslate={() => setTranslating((value) => !value)} />
     </header>
 
     <main className="listening-room">
@@ -276,10 +290,33 @@ export default function Home() {
         </div>}
       </section>
 
-      <section className="lyrics-panel" aria-label="Lyrics">
-        <LyricViewer lines={lyrics.lines} plainLyrics={lyrics.plain} active={activeLyricIndex(lyrics.lines, player.currentTime + offset)} offset={offset}
+      <section ref={panelRef} className="lyrics-panel" aria-label="Lyrics and library"
+        onKeyDown={(event) => { if (event.key === "Escape" && activePanel !== "lyrics" && !event.defaultPrevented) { event.stopPropagation(); closePanel(); } }}>
+        <div className={`panel-view lyrics-view ${activePanel === "lyrics" ? "is-active" : ""}`} inert={activePanel !== "lyrics"} aria-hidden={activePanel !== "lyrics"}>
+          <LyricViewer lines={lyrics.lines} plainLyrics={lyrics.plain} active={activeLyricIndex(lyrics.lines, player.currentTime + offset)} offset={offset}
           loading={lyrics.loading} error={lyrics.error} instrumental={lyrics.instrumental} onSeek={seek}
           onRetry={retryLyrics} canSeek={!matching} fullscreen={fullscreen} translating={translating} language={settings.language} lyricScale={settings.lyricScale} />
+        </div>
+        {(["favorites", "settings"] as const).map((panel) => <div key={panel}
+          className={`panel-view library-view ${activePanel === panel ? "is-active" : ""}`}
+          inert={activePanel !== panel} aria-hidden={activePanel !== panel} aria-labelledby={`${panel}-title`} role="region">
+          <div className="panel-heading"><h2 id={`${panel}-title`} tabIndex={-1}>{panel === "favorites" ? "Favorites" : "Settings"}</h2>
+            <button className="icon-button" aria-label={`Close ${panel}`} onClick={closePanel}><X size={19} /></button>
+          </div>
+          <div className="panel-content">
+            {panel === "settings" ? <SettingsPanel settings={settings} onChange={updateSettings} error={settingsError} /> : <>
+              {storageError && <p role="alert">{storageError}</p>}
+              {!favorites.length && <p className="panel-empty">No saved songs yet.</p>}
+              <ul className="favorites-list">{favorites.map((song) => <li key={song.id}>
+                <button className="search-result" onClick={() => { selectTrack(song); closePanel(); }}>
+                  {song.artwork && <img src={song.artwork} alt="" width={42} height={42} />}
+                  <span className="result-copy"><strong>{song.title}</strong><span>{song.artist}</span></span>
+                </button>
+                <button className="icon-button favorite-button selected" aria-label={`Remove ${song.title} from favorites`} title="Remove from favorites" onClick={() => toggleFavorite(song)}><Heart size={18} fill="currentColor" /></button>
+              </li>)}</ul>
+            </>}
+          </div>
+        </div>)}
       </section>
     </main>
 
@@ -290,24 +327,9 @@ export default function Home() {
       fullscreen={fullscreen} onFullscreen={toggleFullscreen} />
     {fullscreenError && <p className="audio-notice" role="alert">{fullscreenError}</p>}
 
-    <SettingsDialog dialogRef={settingsDialog} settings={settings} onChange={updateSettings} error={settingsError} />
     <footer className="site-credit"><small>&copy; 2026 Jamie Ryu</small></footer>
 
     <div ref={player.containerRef} className="audio-engine" aria-hidden="true" inert />
-
-    <dialog ref={favoritesDialog} className="source-dialog favorites-dialog" aria-labelledby="favorites-title"
-      onClick={(event) => { if (event.target === event.currentTarget) favoritesDialog.current?.close(); }}>
-      <div className="dialog-heading"><h2 id="favorites-title">Favorites</h2><button className="icon-button" aria-label="Close favorites" onClick={() => favoritesDialog.current?.close()}><X size={19} /></button></div>
-      {storageError && <p role="alert">{storageError}</p>}
-      {!favorites.length && <p>No saved songs yet.</p>}
-      <ul className="favorites-list">{favorites.map((song) => <li key={song.id}>
-        <button className="search-result" onClick={() => { selectTrack(song); favoritesDialog.current?.close(); }}>
-          {song.artwork && <img src={song.artwork} alt="" width={42} height={42} />}
-          <span className="result-copy"><strong>{song.title}</strong><span>{song.artist}</span></span>
-        </button>
-        <button className="icon-button favorite-button selected" aria-label={`Remove ${song.title} from favorites`} title="Remove from favorites" onClick={() => toggleFavorite(song)}><Heart size={18} fill="currentColor" /></button>
-      </li>)}</ul>
-    </dialog>
 
     <dialog ref={linkDialog} className="source-dialog" aria-labelledby="source-dialog-title" onCancel={() => setLinkOpen(false)}
       onClick={(event) => { if (event.target === event.currentTarget) setLinkOpen(false); }}>

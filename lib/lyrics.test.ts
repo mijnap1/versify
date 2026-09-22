@@ -13,7 +13,7 @@ test("random starters require multiple distinct timed vocal lines", () => {
   assert.equal(hasTimedLyrics({ syncedLyrics }, 15), false);
   assert.equal(hasTimedLyrics({ syncedLyrics: null }, 180), false);
 });
-import { chooseAudioVideo, findAudioVideo, youtubeResultIdsFromHtml, type VideoCandidate } from "./video-match.ts";
+import { chooseAudioVideo, correctedVideoId, findAudioVideo, youtubeCandidatesFromHtml, youtubeResultIdsFromHtml, type VideoCandidate } from "./video-match.ts";
 
 test("audio matching prefers album-length lyrics over music videos and altered recordings", () => {
   const video = (id: string, title: string, duration: string, embeddable = true): VideoCandidate => ({ id, snippet: { title }, contentDetails: { duration }, status: { embeddable } });
@@ -23,13 +23,27 @@ test("audio matching prefers album-length lyrics over music videos and altered r
     video("lyrics", "Song Lyrics", "PT3M21S"),
     video("blocked", "Song Official Audio", "PT3M20S", false),
   ], 200), "lyrics");
-  assert.equal(chooseAudioVideo([video("mv", "Song Official Music Video", "PT3M20S")], 200), "mv");
+  assert.equal(chooseAudioVideo([video("mv", "Song Official Music Video", "PT3M20S")], 200), null);
+  assert.equal(chooseAudioVideo([video("intro", "Song Official Lyric Video", "PT3M40S")], 200), null);
+  assert.equal(chooseAudioVideo([video("cover", "Song Cover", "PT3M20S")], 200), null);
   assert.equal(chooseAudioVideo([video("long", "Song Lyrics", "PT1H3M20S"), video("audio", "Song Official Audio", "PT3M20S")], 200), "audio");
   assert.equal(chooseAudioVideo([], 200), null);
 });
 
 test("known soundtrack songs bypass YouTube search quota", async () => {
   assert.equal(await findAudioVideo({ title: "Golden", artist: "HUNTR/X", duration: 197 }), "9_bTl2vvYQg");
+  assert.equal(await findAudioVideo({ title: "How It’s Done", artist: "HUNTR/X", duration: 176 }), "5TCOCqw1A58");
+  assert.equal(await findAudioVideo({ title: "Galway Girl", artist: "Ed Sheeran", duration: 170 }), "XjHr-6Zl5P8");
+  assert.equal(correctedVideoId("87gWaABqGYs"), "XjHr-6Zl5P8");
+});
+
+test("public YouTube results use recording metadata rather than the first video ID", () => {
+  const renderer = (videoId: string, title: string, duration: string) => ({ videoRenderer: { videoId, title: { runs: [{ text: title }] }, lengthText: { simpleText: duration }, ownerText: { runs: [{ text: "Artist - Topic" }] } } });
+  const html = `var ytInitialData = ${JSON.stringify({ contents: [renderer("mv", "Song Official Music Video", "3:40"), renderer("wrong", "Unrelated Tune Official Audio", "3:00"), renderer("audio", "Song", "3:00")] })};`;
+  const parsed = youtubeCandidatesFromHtml(html);
+  assert.equal(parsed.length, 3);
+  assert.equal(chooseAudioVideo(parsed, 180, { title: "Song", artist: "Artist" }), "audio");
+  assert.deepEqual(youtubeCandidatesFromHtml("invalid"), []);
 });
 
 test("YouTube results page IDs are deduplicated", () => {

@@ -2,24 +2,36 @@ import { featuredMatch } from "./tracks.ts";
 
 export type VideoCandidate = {
   id: string;
-  snippet: { title: string };
+  snippet: { title: string; channelTitle?: string };
   contentDetails: { duration: string };
   status: { embeddable: boolean };
 };
 
-export function chooseAudioVideo(videos: VideoCandidate[], duration: number): string | null {
+const normalized = (text: string) => text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+export function chooseAudioVideo(videos: VideoCandidate[], duration: number, track?: { title: string; artist: string }): string | null {
   const ranked = videos.filter((video) => video.status?.embeddable).map((video) => {
     const title = video.snippet.title.toLowerCase();
     const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(video.contentDetails.duration);
     const seconds = match ? Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0) : 0;
     const difference = duration > 0 && seconds > 0 ? Math.abs(seconds - duration) : 0;
+    if (!seconds || (duration > 0 && difference > 5)) return null;
+    if (/music video|official video|\bm\/?v\b|movie clip|song scene|extended version/i.test(title)) return null;
+    if (/\blive\b|\bcover\b|\bremix\b|slowed|sped up|nightcore|karaoke|reaction|instrumental|acoustic|demo version/i.test(title)
+      && !/\blive\b|remix|instrumental|acoustic/i.test(track?.title ?? "")) return null;
+    if (track) {
+      const requestedTitle = normalized(track.title.replace(/\s*\([^)]*\)\s*/g, " "));
+      if (!normalized(title).includes(requestedTitle)) return null;
+    }
     let score = -difference * 3;
     if (/\blyrics?\b|\baudio\b/.test(title)) score += 30;
     if (/\bofficial audio\b/.test(title)) score += 10;
+    if (/ - topic$/i.test(video.snippet.channelTitle ?? "")) score += 45;
+    if (track && normalized(video.snippet.channelTitle ?? "") === normalized(track.artist)) score += 35;
     if (/music video|official video|\bm\/?v\b/.test(title)) score -= 25;
     if (/\blive\b|\bcover\b|\bremix\b|slowed|sped up|nightcore|karaoke|reaction/.test(title)) score -= 100;
     return { id: video.id, score };
-  });
+  }).filter((video): video is { id: string; score: number } => video !== null);
   ranked.sort((a, b) => b.score - a.score);
   return ranked[0]?.id ?? null;
 }
@@ -28,19 +40,46 @@ function knownAudioVideo(track: { title: string; artist: string }) {
   const title = track.title.toLowerCase();
   const artist = track.artist.toLowerCase();
   if (title === "golden" && (artist.includes("huntr/x") || artist.includes("kpop demon hunters"))) return "9_bTl2vvYQg";
+  if (normalized(title) === "galwaygirl" && normalized(artist) === "edsheeran") return "XjHr-6Zl5P8";
+  if (normalized(title) === "howitsdone" && (artist.includes("huntr/x") || artist.includes("ejae"))) return "5TCOCqw1A58";
   return null;
+}
+
+export function correctedVideoId(id: string | undefined) {
+  const replacements: Record<string, string> = { "87gWaABqGYs": "XjHr-6Zl5P8", "QGsevnbItdU": "5TCOCqw1A58", "tzFadK-XJ8g": "5TCOCqw1A58", "7vCK0VBuQLs": "5TCOCqw1A58", "zWC9EOtuFY4": "5TCOCqw1A58" };
+  return id ? replacements[id] ?? id : undefined;
+}
+
+export function youtubeCandidatesFromHtml(html: string): VideoCandidate[] {
+  const match = /var ytInitialData = (\{[\s\S]*?\});/.exec(html);
+  if (!match) return [];
+  const candidates: VideoCandidate[] = [];
+  const text = (value: { simpleText?: string; runs?: { text: string }[] } | undefined) => value?.simpleText ?? value?.runs?.map((run) => run.text).join("") ?? "";
+  function visit(value: unknown) {
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, any>;
+    const video = record.videoRenderer;
+    if (video?.videoId && video.lengthText) {
+      const parts = text(video.lengthText).split(":").map(Number);
+      const seconds = parts.reduce((total, part) => total * 60 + part, 0);
+      if (Number.isFinite(seconds) && seconds > 0) candidates.push({ id: video.videoId, snippet: { title: text(video.title), channelTitle: text(video.ownerText) }, contentDetails: { duration: `PT${seconds}S` }, status: { embeddable: true } });
+    }
+    Object.values(record).forEach(visit);
+  }
+  try { visit(JSON.parse(match[1])); } catch { return []; }
+  return candidates;
 }
 
 export function youtubeResultIdsFromHtml(html: string) {
   return [...new Set([...html.matchAll(/"videoId":"([\w-]{11})"/g)].map((match) => match[1]))];
 }
 
-async function findPublicYouTubeVideo(query: string, signal?: AbortSignal) {
+async function findPublicYouTubeVideo(query: string, track: { title: string; artist: string; duration: number }, signal?: AbortSignal) {
   try {
     const params = new URLSearchParams({ search_query: query });
     const response = await fetch(`https://www.youtube.com/results?${params}`, { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 86400 }, signal: AbortSignal.any([AbortSignal.timeout(10000), ...(signal ? [signal] : [])]) });
     if (!response.ok) return null;
-    return youtubeResultIdsFromHtml(await response.text())[0] ?? null;
+    return chooseAudioVideo(youtubeCandidatesFromHtml(await response.text()), track.duration, track);
   } catch {
     return null;
   }
@@ -57,7 +96,7 @@ export async function findAudioVideo(track: { title: string; artist: string; dur
   const queries = [
     `${track.artist} ${title} lyrics audio`,
     `${title} ${track.artist} official audio`,
-    `${title} lyrics audio`,
+    `${track.artist} ${title} topic`,
   ];
 
   if (key) {
@@ -74,14 +113,14 @@ export async function findAudioVideo(track: { title: string; artist: string; dur
       const detailsQuery = new URLSearchParams({ key, part: "snippet,contentDetails,status", id: ids.join(",") });
       const details = await fetch(`https://www.googleapis.com/youtube/v3/videos?${detailsQuery}`, { next: { revalidate: 86400 }, signal: AbortSignal.any([AbortSignal.timeout(10000), ...(signal ? [signal] : [])]) });
       if (!details.ok) continue;
-      const videoId = chooseAudioVideo((await details.json()).items ?? [], track.duration);
+      const videoId = chooseAudioVideo((await details.json()).items ?? [], track.duration, track);
       if (videoId) return videoId;
     } catch { /* Try the next query shape. */ }
   }
 
   for (const q of queries) {
     if (signal?.aborted) return null;
-    const videoId = await findPublicYouTubeVideo(q, signal);
+    const videoId = await findPublicYouTubeVideo(q, track, signal);
     if (videoId) return videoId;
   }
 
