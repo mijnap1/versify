@@ -1,5 +1,15 @@
 export type LyricLine = { time: number; text: string };
 
+// Use the original vocal text, never the user's translation setting or genre.
+export function lyricLanguage(lyrics: { syncedLyrics?: string | null; plainLyrics?: string | null }): string | null {
+  const text = (lyrics.syncedLyrics || lyrics.plainLyrics || "").replace(/\[[^\]]*\]/g, "");
+  if ((text.match(/\p{Script=Hangul}/gu) ?? []).length >= 4) return "ko";
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text)) return "ja";
+  if ((text.match(/\p{Script=Han}/gu) ?? []).length >= 4) return "zh";
+  // Latin script alone cannot distinguish English, Spanish, romanized Korean, etc.
+  return null;
+}
+
 export function parseLrc(lrc: string): LyricLine[] {
   const offset = Number(lrc.match(/\[offset:([+-]?\d+)\]/i)?.[1] ?? 0) / 1000;
   return lrc.split(/\r?\n/).flatMap((line) => {

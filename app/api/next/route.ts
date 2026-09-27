@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasTimedLyrics } from "@/lib/starter";
 import { type Track } from "@/lib/tracks";
 import { findAudioVideo } from "@/lib/video-match";
+import { lyricLanguage } from "@/lib/lyrics";
+import { findLyrics } from "@/lib/lyric-source";
 
 import { discoverGenreSongs, variedRecommendations } from "@/lib/recommendations";
 import { validHistory, wasRecentlyPlayed } from "@/lib/playback-history";
@@ -33,12 +35,9 @@ export async function POST(request: NextRequest) {
   const signal = AbortSignal.any([controller.signal, request.signal, deadline]);
   async function prepare(track: Track) {
     const candidateSignal = AbortSignal.any([signal, AbortSignal.timeout(7000)]);
-    const query = new URLSearchParams({ track_name: track.title, artist_name: track.artist, album_name: track.album, duration: String(Math.round(track.duration)) });
-    const response = await fetch(`https://lrclib.net/api/get?${query}`, { headers: { "User-Agent": "Versify/1.0" }, next: { revalidate: 86400 }, signal: AbortSignal.any([candidateSignal, AbortSignal.timeout(2500)]) });
-    if (!response.ok) throw new Error("Lyrics unavailable");
-    const lyrics = await response.json();
+    const lyrics = await findLyrics(track, candidateSignal);
     if (!hasTimedLyrics(lyrics, track.duration)) throw new Error("Untimed lyrics");
-    const videoId = await findAudioVideo(track, candidateSignal);
+    const videoId = await findAudioVideo({ ...track, language: lyricLanguage(lyrics) }, candidateSignal);
     if (!videoId) throw new Error("Audio unavailable");
     if (wasRecentlyPlayed({ ...track, videoId }, recent)) throw new Error("Recently played recording");
     return { track: { ...track, videoId }, lyrics: { syncedLyrics: lyrics.syncedLyrics, plainLyrics: lyrics.plainLyrics ?? null, instrumental: false } };

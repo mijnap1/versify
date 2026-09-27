@@ -2,12 +2,36 @@ import { featuredMatch } from "./tracks.ts";
 
 export type VideoCandidate = {
   id: string;
-  snippet: { title: string; channelTitle?: string };
+  snippet: { title: string; channelTitle?: string; defaultAudioLanguage?: string };
   contentDetails: { duration: string };
   status: { embeddable: boolean };
 };
 
 const normalized = (text: string) => text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+type AudioTrack = { title: string; artist: string; language?: string | null };
+export const audioLanguages: Record<string, string> = { ko: "Korean", ja: "Japanese", zh: "Chinese", en: "English", es: "Spanish", fr: "French", pt: "Portuguese" };
+
+const versionLabels: Record<string, string> = {
+  ko: "korean|kor|한국어|韓国語", ja: "japanese|jpn|日本語",
+  zh: "chinese|chn|chi|mandarin|中文|国语|國語", en: "english|eng|영어",
+  es: "spanish|español", fr: "french|français", pt: "portuguese|português",
+};
+
+function versionLanguage(title: string): string | null {
+  for (const [code, labels] of Object.entries(versionLabels)) {
+    if (new RegExp(`(?:^|[\\s([_-])(?:${labels})\\s*(?:(?:ver(?:sion)?|audio|original)\\b|版本|版|버전|[)\\]]|$)`, "i").test(title)) return code;
+  }
+  return null;
+}
+
+function recordingTitle(title: string) {
+  // Remove only language qualifiers; keep live/remix/acoustic edition names.
+  const labels = Object.values(versionLabels).join("|");
+  return title.replace(new RegExp(`(?:\\b(?:${labels})\\s*(?:ver(?:sion)?\\.?|version|audio|original)|(?:${labels})\\s*(?:版本|版|버전))`, "gi"), "")
+    .replace(new RegExp(`[([]\\s*(?:${labels})\\s*[)\\]]`, "gi"), "")
+    .replace(/[([]\s*[)\]]/g, "").replace(/\s*[-–]\s*$/, "").trim();
+}
 
 export function isBackingTrack(title: string, channel = "") {
   return /karaoke|instrumental|\binst\b|\bmr\b|backing track|off[\s-]*vocal|without vocals|노래방|반주|カラオケ|伴奏|금영|tj\s*미디어/i.test(`${title} ${channel}`);
@@ -18,7 +42,7 @@ function verifiedBalladAudio(track: { title: string; artist: string }) {
     && ["onestar", "임한별"].includes(normalized(track.artist)) ? "T_MhUFvlq6g" : null;
 }
 
-export function chooseAudioVideo(videos: VideoCandidate[], duration: number, track?: { title: string; artist: string }): string | null {
+export function chooseAudioVideo(videos: VideoCandidate[], duration: number, track?: AudioTrack): string | null {
   const ranked = videos.filter((video) => video.status?.embeddable).map((video) => {
     const title = video.snippet.title.toLowerCase();
     const match = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(video.contentDetails.duration);
@@ -30,8 +54,18 @@ export function chooseAudioVideo(videos: VideoCandidate[], duration: number, tra
     if (/\blive\b|\bcover\b|\bremix\b|slowed|sped up|nightcore|karaoke|reaction|instrumental|acoustic|demo version/i.test(title)
       && !/\blive\b|remix|instrumental|acoustic/i.test(track?.title ?? "")) return null;
     if (track) {
-      const requestedTitle = normalized(track.title.replace(/\s*\([^)]*\)\s*/g, " "));
-      if (!normalized(title).includes(requestedTitle)) return null;
+      const expected = track.language || versionLanguage(track.title);
+      const version = versionLanguage(title);
+      const spoken = video.snippet.defaultAudioLanguage?.split("-")[0];
+      if (version && version !== expected) return null;
+      if (expected && spoken && spoken !== expected) return null;
+      // ponytail: metadata cannot verify sung language; require an explicit match
+      // for detected lyric languages until an audio-language verifier is available.
+      if (expected && version !== expected && spoken !== expected) return null;
+      const requestedTitle = normalized(recordingTitle(track.title));
+      if (!requestedTitle || !normalized(recordingTitle(title)).includes(requestedTitle)) return null;
+      const artist = normalized(track.artist);
+      if (!normalized(title).includes(artist) && !normalized(video.snippet.channelTitle ?? "").includes(artist)) return null;
     }
     let score = -difference * 3;
     if (/\blyrics?\b|\baudio\b/.test(title)) score += 30;
@@ -88,7 +122,7 @@ export function youtubeResultIdsFromHtml(html: string) {
   return [...new Set([...html.matchAll(/"videoId":"([\w-]{11})"/g)].map((match) => match[1]))];
 }
 
-async function findPublicYouTubeVideo(query: string, track: { title: string; artist: string; duration: number }, signal?: AbortSignal) {
+async function findPublicYouTubeVideo(query: string, track: AudioTrack & { duration: number }, signal?: AbortSignal) {
   try {
     const params = new URLSearchParams({ search_query: query });
     const response = await fetch(`https://www.youtube.com/results?${params}`, { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 86400 }, signal: AbortSignal.any([AbortSignal.timeout(10000), ...(signal ? [signal] : [])]) });
@@ -99,14 +133,16 @@ async function findPublicYouTubeVideo(query: string, track: { title: string; art
   }
 }
 
-export async function findAudioVideo(track: { title: string; artist: string; duration: number }, signal?: AbortSignal) {
+export async function findAudioVideo(track: AudioTrack & { duration: number }, signal?: AbortSignal) {
+  const language = track.language || versionLanguage(track.title);
+  track = { ...track, language };
   const featured = featuredMatch(track.title, track.artist);
-  if (featured?.videoId) return featured.videoId;
+  if (featured?.videoId && (!language || language === "en")) return featured.videoId;
   const known = knownAudioVideo(track);
-  if (known) return known;
+  if (known && (!language || language === (verifiedBalladAudio(track) ? "ko" : "en"))) return known;
 
   const key = process.env.YOUTUBE_API_KEY;
-  const title = track.title.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+  const title = `${recordingTitle(track.title)} ${language ? `${audioLanguages[language] ?? language} version` : ""}`.trim();
   const queries = [
     `${track.artist} ${title} lyrics audio`,
     `${title} ${track.artist} official audio`,

@@ -12,11 +12,10 @@ import { SearchBar } from "@/components/SearchBar";
 import { LyricViewer } from "@/components/LyricViewer";
 import { PlayerControls } from "@/components/PlayerControls";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
-import { activeLyricIndex, parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
+import { activeLyricIndex, lyricLanguage, parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
 import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
 import { featuredTracks, type Track } from "@/lib/tracks";
 import { rememberSong, type PlayedSong } from "@/lib/playback-history";
-import { correctedVideoId } from "@/lib/video-match";
 
 type LyricsState = { lines: LyricLine[]; plain: string | null; instrumental: boolean; loading: boolean; error: string | null };
 type NextSong = { track: Track; lyrics?: { syncedLyrics: string; plainLyrics: string | null } };
@@ -92,7 +91,10 @@ export default function Home() {
       starterLyrics.current = { id: data.track.id, data: { lines: parseLrc(data.lyrics.syncedLyrics), plain: data.lyrics.plainLyrics, instrumental: false, loading: false, error: null } };
       setTrack(data.track); setVideoId(data.track.videoId ?? null);
     }).catch(() => {
-      if (!controller.signal.aborted) starterLyrics.current = { id: featuredTracks[0].id, data: { ...emptyLyrics, loading: false, error: "Lyrics services are unavailable. Try again or search for a song." } };
+      if (!controller.signal.aborted) {
+        setTrack({ ...featuredTracks[0], videoId: undefined }); setVideoId(null);
+        starterLyrics.current = { id: featuredTracks[0].id, data: { ...emptyLyrics, loading: false, error: "Lyrics services are unavailable. Try again or search for a song." } };
+      }
     }).finally(() => { if (!controller.signal.aborted) setInitialized(true); });
     return () => controller.abort();
   }, []);
@@ -131,37 +133,37 @@ export default function Home() {
     if (!initialized) return;
     if (starterLyrics.current?.id === track.id && retry === 0) {
       setLyrics(starterLyrics.current.data);
+      setVideoId(track.videoId ?? null); setMatching(false); setMatchingError(null);
       return;
     }
     const controller = new AbortController();
-    setLyrics(emptyLyrics);
-    const params = new URLSearchParams({ title: track.title, artist: track.artist, album: track.album, duration: String(track.duration) });
-    fetch(`/api/lyrics?${params}`, { signal: controller.signal }).then(async (response) => {
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
-      if (!controller.signal.aborted) setLyrics({
-        lines: data.syncedLyrics ? parseLrc(data.syncedLyrics) : [],
-        plain: data.plainLyrics, instrumental: data.instrumental, loading: false, error: null,
-      });
-    }).catch((error: Error) => {
-      if (!controller.signal.aborted) setLyrics({ ...emptyLyrics, loading: false, error: error.message });
-    });
-    return () => controller.abort();
-  }, [track, retry, initialized]);
-
-  useEffect(() => {
-    if (!initialized) return;
-    if (track.videoId) { setVideoId(track.videoId); setMatching(false); setMatchingError(null); return; }
-    const controller = new AbortController();
     videoRequest.current = controller;
-    setMatching(true); setMatchingError(null);
-    fetch(`/api/video?${new URLSearchParams({ title: track.title, artist: track.artist, duration: String(track.duration) })}`, { signal: controller.signal })
-      .then(async (response) => { if (!response.ok) throw new Error("Audio matching is unavailable."); return response.json(); })
-      .then((data) => { if (!controller.signal.aborted) { setVideoId(data.videoId ?? null); setMatchingError(data.error ?? null); } })
-      .catch((error: Error) => { if (!controller.signal.aborted) setMatchingError(error.message); })
+    setLyrics(emptyLyrics); setVideoId(null); setMatching(true); setMatchingError(null);
+    const params = new URLSearchParams({ title: track.title, artist: track.artist, album: track.album, duration: String(track.duration) });
+    async function prepare() {
+      let data;
+      try {
+        const response = await fetch(`/api/lyrics?${params}`, { signal: controller.signal });
+        data = await response.json();
+        if (!response.ok) throw new Error(data.error);
+      } catch (error) {
+        if (!controller.signal.aborted) setLyrics({ ...emptyLyrics, loading: false, error: error instanceof Error ? error.message : "Lyrics unavailable." });
+        throw new Error("Load the lyrics before matching audio. Please try again.");
+      }
+      if (controller.signal.aborted) return;
+      setLyrics({ lines: data.syncedLyrics ? parseLrc(data.syncedLyrics) : [], plain: data.plainLyrics, instrumental: data.instrumental, loading: false, error: null });
+      if (!data.syncedLyrics && !data.plainLyrics && !data.instrumental) throw new Error("No lyrics available to match this recording. You can connect a YouTube link.");
+      const language = lyricLanguage(data);
+      if (language) params.set("language", language);
+      const response = await fetch(`/api/video?${params}`, { signal: controller.signal });
+      if (!response.ok) throw new Error("Audio matching is unavailable.");
+      const audio = await response.json();
+      if (!controller.signal.aborted) { setVideoId(audio.videoId ?? null); setMatchingError(audio.error ?? null); }
+    }
+    prepare().catch((error: Error) => { if (!controller.signal.aborted) setMatchingError(error.message); })
       .finally(() => { if (!controller.signal.aborted) setMatching(false); });
     return () => controller.abort();
-  }, [track, initialized]);
+  }, [track, retry, initialized]);
 
   useEffect(() => {
     if (player.ready && pendingSeek.current !== null) {
@@ -175,11 +177,10 @@ export default function Home() {
   }, [linkOpen]);
 
   const selectTrack = useCallback((next: Track, playlistQueue: PlaylistQueue | null = null) => {
-    next = { ...next, videoId: correctedVideoId(next.videoId, next) };
     starterLyrics.current = null;
     videoRequest.current?.abort();
-    setStarted(true); setVideoId(next.videoId ?? null); setMatching(!next.videoId); pendingSeek.current = null;
-    setTrack(next); setOffset(0); setLinkOpen(false); setMatchingError(null);
+    setStarted(true); setVideoId(null); setMatching(true); pendingSeek.current = null;
+    setTrack(next); setRetry(0); setOffset(0); setLinkOpen(false); setMatchingError(null);
     setArtworkFailed(false); setLink(""); setLinkError("");
     setQueue(playlistQueue); setPlaybackVersion((value) => value + 1);
   }, []);
@@ -202,19 +203,21 @@ export default function Home() {
         const failed = [...queue.failed];
         for (const entry of nextPlaylistEntries(queue, repeat)) {
           controller.signal.throwIfAborted();
-          const song = { ...entry.track, videoId: correctedVideoId(entry.track.videoId, entry.track) };
+          const song = { ...entry.track, videoId: undefined as string | undefined };
+          let lyrics;
           try {
-            if (!song.videoId) {
-              const response = await fetch(`/api/video?${new URLSearchParams({ title: song.title, artist: song.artist, duration: String(song.duration) })}`,
-                { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]) });
-              if (!response.ok) throw new Error("Audio unavailable");
-              song.videoId = (await response.json()).videoId;
-            }
+            const params = new URLSearchParams({ title: song.title, artist: song.artist, album: song.album, duration: String(song.duration) });
+            const lyricResponse = await fetch(`/api/lyrics?${params}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+            if (!lyricResponse.ok) throw new Error("Lyrics unavailable");
+            lyrics = await lyricResponse.json();
+            if (!lyrics.syncedLyrics && !lyrics.plainLyrics && !lyrics.instrumental) throw new Error("Lyrics unavailable");
+            const language = lyricLanguage(lyrics);
+            if (language) params.set("language", language);
+            const response = await fetch(`/api/video?${params}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+            if (!response.ok) throw new Error("Audio unavailable");
+            song.videoId = (await response.json()).videoId;
             if (!song.videoId) throw new Error("Audio unavailable");
           } catch { controller.signal.throwIfAborted(); failed.push(song.id); continue; }
-          const params = new URLSearchParams({ title: song.title, artist: song.artist, album: song.album, duration: String(song.duration) });
-          const lyrics = await fetch(`/api/lyrics?${params}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(6000)]) })
-            .then((response) => response.ok ? response.json() : undefined).catch(() => undefined);
           if (!controller.signal.aborted) setNextSong({ ...context, data: { track: song, lyrics }, queueIndex: entry.index, failed });
           return;
         }
@@ -251,11 +254,12 @@ export default function Home() {
   }, [player.ended, player.error, repeatSong, player.seek, player.toggle, queue, matching, matchingError, videoId, advanceSong]);
 
   const playPause = useCallback(() => {
+    if (matching) return;
     if (!videoId) { setLinkOpen(true); return; }
     if (!started) setStarted(true);
     else if (player.error && !player.ready) setStarted(false);
     else player.toggle();
-  }, [videoId, started, player.error, player.ready, player.toggle]);
+  }, [videoId, started, matching, player.error, player.ready, player.toggle]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -396,7 +400,7 @@ export default function Home() {
       }}>
         <div className="dialog-heading"><Link2 size={21} /><button type="button" className="icon-button" aria-label="Close audio dialog" onClick={() => setLinkOpen(false)}><X size={19} /></button></div>
         <h2 id="source-dialog-title">{videoId ? "Your version." : "Connect the music."}</h2>
-        <p>Choose a YouTube recording of {track.title} by {track.artist}.</p>
+        <p>Choose a YouTube recording of {track.title} by {track.artist} in the same language and version as the lyrics.</p>
         <label htmlFor="youtube-url">YouTube link</label>
         <input id="youtube-url" placeholder="https://www.youtube.com/watch?v=..." value={link}
           onChange={(event) => { setLink(event.target.value); setLinkError(""); }} autoComplete="off" autoFocus />

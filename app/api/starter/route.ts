@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { starterTracks, type Track } from "@/lib/tracks";
 import { hasTimedLyrics } from "@/lib/starter";
 import { findAudioVideo } from "@/lib/video-match";
+import { lyricLanguage } from "@/lib/lyrics";
+import { findLyrics } from "@/lib/lyric-source";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -41,12 +43,9 @@ export async function GET() {
 
   for (const track of [...shuffled(candidates).slice(0, 24), ...shuffled(starterTracks)]) {
     try {
-      const query = new URLSearchParams({ track_name: track.title, artist_name: track.artist, album_name: track.album, duration: String(Math.round(track.duration)) });
-      const response = await fetch(`https://lrclib.net/api/get?${query}`, { headers: { "User-Agent": "Versify/1.0" }, next: { revalidate: 86400 }, signal: AbortSignal.timeout(2500) });
-      if (!response.ok) continue;
-      const lyrics = await response.json();
+      const lyrics = await findLyrics(track, AbortSignal.timeout(5000));
       if (!hasTimedLyrics(lyrics, track.duration)) continue;
-      const videoId = await findAudioVideo(track);
+      const videoId = await findAudioVideo({ ...track, language: lyricLanguage(lyrics) });
       if (!videoId) continue;
       return NextResponse.json({ track: { ...track, videoId }, lyrics: { syncedLyrics: lyrics.syncedLyrics, plainLyrics: lyrics.plainLyrics ?? null, instrumental: false } }, { headers: { "Cache-Control": "no-store" } });
     } catch { /* Skip unavailable or untimed recordings. */ }

@@ -1,8 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseLrc, activeLyricIndex, youtubeId } from "./lyrics.ts";
+import { parseLrc, activeLyricIndex, youtubeId, lyricLanguage } from "./lyrics.ts";
 import { artworkPalette } from "./artwork.ts";
 import { hasTimedLyrics } from "./starter.ts";
+import { findLyrics } from "./lyric-source.ts";
+
+test("incomplete exact lyrics yield to a complete timed recording match", async (t) => {
+  const incomplete = { trackName: "Pretty Please", artistName: "Hearts2Hearts", duration: 205,
+    syncedLyrics: "[00:02]Girls, you ready?", plainLyrics: "Intro\nSecond\nThird\nFourth\nFifth\nSixth", instrumental: false };
+  const complete = { ...incomplete, duration: 204, syncedLyrics: "[00:02]Intro\n[00:30]Second\n[01:00]Third\n[01:30]Fourth\n[02:00]Fifth\n[03:00]Sixth" };
+  const mock = t.mock.method(globalThis, "fetch", async (input: string | URL | Request) =>
+    Response.json(String(input).includes("/get?") ? incomplete : [incomplete, { ...complete, artistName: "Other Artist" }, { ...complete, duration: 260 }, complete]));
+  const result = await findLyrics({ title: "Pretty Please", artist: "Hearts2Hearts", album: "FOCUS", duration: 205 });
+  assert.equal(result.syncedLyrics, complete.syncedLyrics);
+  assert.equal(mock.mock.callCount(), 2);
+});
+
+test("incomplete timing falls back to full plain lyrics, including when search fails", async (t) => {
+  const incomplete = { trackName: "Song", artistName: "Artist", duration: 200,
+    syncedLyrics: "[00:02]Intro", plainLyrics: "Intro\nSecond\nThird\nFourth\nFifth\nSixth", instrumental: false };
+  let failSearch = false;
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => String(input).includes("/get?")
+    ? Response.json(incomplete) : failSearch ? new Response(null, { status: 502 }) : Response.json([incomplete]));
+  const track = { title: "Song", artist: "Artist", album: "Album", duration: 200 };
+  assert.deepEqual(await findLyrics(track), { syncedLyrics: null, plainLyrics: incomplete.plainLyrics, instrumental: false });
+  failSearch = true;
+  assert.deepEqual(await findLyrics(track), { syncedLyrics: null, plainLyrics: incomplete.plainLyrics, instrumental: false });
+});
+
+test("an intro with several timestamps is still incomplete against the full lyrics", () => {
+  assert.equal(hasTimedLyrics({ syncedLyrics: "[00:02]Intro\n[00:10]Two\n[00:20]Three\n[00:30]Four\n[00:40]Five",
+    plainLyrics: Array.from({ length: 70 }, (_, index) => `Line ${index}`).join("\n") }, 205), false);
+});
 
 test("random starters require multiple distinct timed vocal lines", () => {
   const syncedLyrics = "[00:10]one\n[00:20]two\n[00:30]three\n[00:40]four\n[00:50]five";
@@ -35,6 +64,64 @@ test("known soundtrack songs bypass YouTube search quota", async () => {
   assert.equal(await findAudioVideo({ title: "How It’s Done", artist: "HUNTR/X", duration: 176 }), "5TCOCqw1A58");
   assert.equal(await findAudioVideo({ title: "Galway Girl", artist: "Ed Sheeran", duration: 170 }), "XjHr-6Zl5P8");
   assert.equal(correctedVideoId("87gWaABqGYs"), "XjHr-6Zl5P8");
+});
+
+test("lyric language uses original text, ignores LRC metadata, and keeps Latin text unknown", () => {
+  assert.equal(lyricLanguage({ syncedLyrics: "[ar:English]\n[00:10]차갑도록 서롤 겨눈 채\n[00:20]It's the love shot" }), "ko");
+  assert.equal(lyricLanguage({ plainLyrics: "君の声が聞こえる夜" }), "ja");
+  assert.equal(lyricLanguage({ plainLyrics: "世界中の未来" }), "ja");
+  assert.equal(lyricLanguage({ plainLyrics: "冷漠的目光彼此对视" }), "zh");
+  assert.equal(lyricLanguage({ syncedLyrics: "[ar:한국어 가수]\n[00:10]It's the love shot" }), null);
+  assert.equal(lyricLanguage({ plainLyrics: "Despacito, quiero respirar tu cuello despacito" }), null);
+  assert.equal(lyricLanguage({}), null);
+});
+
+test("Love Shot audio follows Korean lyrics, rejecting foreign and unconfirmed recordings", () => {
+  const track = { title: "Love Shot", artist: "EXO", language: "ko" };
+  const video = (id: string, title: string, spoken?: string): VideoCandidate => ({ id,
+    snippet: { title, channelTitle: "EXO - Topic", defaultAudioLanguage: spoken },
+    contentDetails: { duration: "PT3M20S" }, status: { embeddable: true } });
+  const wrong = [video("chinese", "Love Shot (Chinese Version)"), video("chi", "Love Shot (Chi ver.)"), video("english", "EXO Love Shot (English Ver.)"),
+    video("japanese", "Love Shot (Japanese)"), video("unknown", "Love Shot"),
+    video("conflict", "Love Shot (Korean Version)", "zh-CN")];
+  assert.equal(chooseAudioVideo(wrong, 200, track), null);
+  assert.equal(chooseAudioVideo([...wrong, video("korean", "EXO Love Shot (Korean Ver.)")], 200, track), "korean");
+  assert.equal(chooseAudioVideo([...wrong, video("original", "Love Shot", "ko-KR")], 200, track), "original");
+  assert.equal(chooseAudioVideo([video("subs", "Love Shot [English Subtitles]", "ko")], 200, track), "subs");
+  assert.equal(chooseAudioVideo([video("translation", "Love Shot (Korean Lyrics)")], 200, track), null);
+  assert.equal(chooseAudioVideo([video("wrong-artist", "Love Shot (Korean Version)")], 200, { ...track, artist: "Someone Else" }), null);
+  assert.equal(chooseAudioVideo([video("wrong-length", "Love Shot (Korean Version)")], 240, track), null);
+});
+
+test("explicit versions remain selectable and lyric language wins over catalog version labels", () => {
+  const video = (id: string, title: string): VideoCandidate => ({ id, snippet: { title, channelTitle: "EXO - Topic" },
+    contentDetails: { duration: "PT3M20S" }, status: { embeddable: true } });
+  const videos = [video("zh", "Love Shot (Chinese Version)"), video("en", "Love Shot (English Version)"), video("ko", "Love Shot (Korean Version)")];
+  assert.equal(chooseAudioVideo(videos, 200, { title: "Love Shot", artist: "EXO", language: "zh" }), "zh");
+  assert.equal(chooseAudioVideo(videos, 200, { title: "Love Shot - English Version", artist: "EXO" }), "en");
+  assert.equal(chooseAudioVideo(videos, 200, { title: "Love Shot (Chinese Version)", artist: "EXO", language: "ko" }), "ko");
+  assert.equal(chooseAudioVideo(videos, 200, { title: "Love Shot (Live)", artist: "EXO", language: "ko" }), null);
+});
+
+test("both YouTube search paths carry the lyric language and reject wrong-language results", async (t) => {
+  const previousKey = process.env.YOUTUBE_API_KEY;
+  t.after(() => { if (previousKey === undefined) delete process.env.YOUTUBE_API_KEY; else process.env.YOUTUBE_API_KEY = previousKey; });
+  process.env.YOUTUBE_API_KEY = "test-key";
+  const queries: string[] = [];
+  const fetchMock = t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/search")) {
+      queries.push(url.searchParams.get("q")!);
+      return Response.json({ items: [{ id: { videoId: "wrong" } }] });
+    }
+    if (url.pathname.endsWith("/videos")) return Response.json({ items: [{ id: "wrong", snippet: { title: "Love Shot (Chinese Version)", channelTitle: "EXO - Topic" }, contentDetails: { duration: "PT200S" }, status: { embeddable: true } }] });
+    queries.push(url.searchParams.get("search_query")!);
+    return new Response(`var ytInitialData = ${JSON.stringify({ videoRenderer: { videoId: "correct", title: { simpleText: "EXO Love Shot (Korean Version)" }, ownerText: { simpleText: "EXO - Topic" }, lengthText: { simpleText: "3:20" } } })};`);
+  });
+  assert.equal(await findAudioVideo({ title: "Love Shot", artist: "EXO", duration: 200, language: "ko" }), "correct");
+  assert.equal(queries.length, 4);
+  assert.ok(queries.every((query) => query.includes("Korean version")));
+  assert.equal(fetchMock.mock.callCount(), 7);
 });
 
 test("public YouTube results use recording metadata rather than the first video ID", () => {
