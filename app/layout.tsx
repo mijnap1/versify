@@ -3,7 +3,7 @@ import "@fontsource-variable/manrope";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Versafy",
+  title: "Versify",
   description: "Find your song. Follow every word. A quiet space for music and synchronized lyrics.",
 };
 
