@@ -23,7 +23,7 @@
 
 <br>
 
-Versify is a listening room where lyrics take center stage. Find a song, settle into its artwork, and let each line meet the music, right on time. No feed, no recommendations wall: just one song, its sleeve, and its words.
+Pick a song and read along. Versify plays the lyrics in time with the music, right over the album art. There’s no feed and nothing pulling you elsewhere, just one song and its words.
 
 > [!NOTE]
 > There are no accounts. Favorites, playlists, and settings stay in the browser you use, and do not sync between devices.
