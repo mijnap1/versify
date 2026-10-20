@@ -1,108 +1,95 @@
 <div align="center">
 
-# Versify
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/hero-dark.svg">
+  <img src="docs/readme/hero-light.svg" width="100%" alt="Versify: a record spins behind its sleeve while lyric lines light up one at a time, in step with the music.">
+</picture>
 
-### A quieter way to listen—and a closer way to follow every word.
+<br>
+<br>
 
-A music listening room where synchronized lyrics take center stage. Find a song, settle into its artwork, and let each line meet the music in real time.
+**A quieter way to listen, and a closer way to follow every word.**
 
-[Get started](#get-started) · [Explore the features](#made-for-listening) · [Why Versify](#why-versify)
-
-</div>
-
----
-
-## A listening room, not another feed
-
-Versify pairs a pared-back record-inspired player with live song discovery and synchronized lyrics. The artwork sets the color and mood; the lyrics stay in step with playback, ready to follow, seek, or translate.
-
-<div align="center">
-
-![Versify playing a song with album artwork, a vinyl record, and synchronized lyrics](docs/images/versify-player.jpg)
-
-<sub>The current song, its sleeve, a record in motion, and lyrics that follow the music.</sub>
+<sub>[Get started](#get-started) &nbsp;·&nbsp; [How it works](#how-a-song-finds-its-words) &nbsp;·&nbsp; [Liner notes](#liner-notes)</sub>
 
 </div>
 
-## Made for listening
+<br>
 
-- **Find a song.** Search a broad, changing pool of songs from the Apple catalog and pick the recording you mean from the results.
-- **Follow the lyrics.** Timed lyrics highlight and scroll with playback. Choose a line to seek to that moment, or pause and read at your own pace.
-- **Listen to a version that fits.** Versify looks for a matching YouTube recording. If it finds the wrong version—or no match—you can connect a YouTube link yourself and adjust lyric timing.
-- **Build a little library.** Save favorites, make and rename playlists, shuffle a collection, and pick up where you left off. Your library stays in this browser; there is no account or cloud sync.
-- **Make it yours.** Artwork colors the listening room. Tune lyric size and language, choose a 12- or 24-hour clock, and move into fullscreen.
-- **Keep the essentials close.** Play or pause, seek, adjust volume, repeat a song or playlist, and jump to the next track from a compact set of controls.
+Versify is a listening room where lyrics take center stage. Find a song, settle into its artwork, and let each line meet the music, right on time. No feed, no recommendations wall: just one song, its sleeve, and its words.
 
-<div align="center">
+## Side A
 
-| Search | Library |
-|:---:|:---:|
-| ![Search results for a song, showing multiple matching artists and album artwork](docs/images/versify-search.jpg) | ![Versify library showing a saved-song collection](docs/images/versify-library.jpg) |
-| Find the right song from a title search. | Keep favorites and playlists together. |
+| No. | Track | Liner note |
+|:---:|---|---|
+| 01 | **Find the song you mean** | Search Apple's catalog, including artists only sold in Japan, and pick the exact recording. |
+| 02 | **Follow every word** | Timed lyrics glow and scroll with playback. Tap a line to jump there, or scroll back and read at your own pace. |
+| 03 | **Hear the right version** | Versify plays the official master the lyrics were timed to. Wrong edit? Connect any YouTube link and nudge the timing. |
+| 04 | **Read it in your language** | Optional translations sit beneath each line: Korean, Japanese, Chinese, French, Spanish, or Portuguese. |
+| 05 | **Keep a small library** | Save favorites, build and rename playlists, shuffle and loop them. Everything stays in this browser, with no account. |
+| 06 | **Let the artwork set the room** | The palette is drawn from the sleeve. Choose the lyric size and a 12- or 24-hour clock, then go fullscreen. |
+| 07 | **Never run out** | When a song ends, the next one comes from the same genre and its charts. |
 
-</div>
+## How a song finds its words
 
-<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/flow-dark.svg">
+  <img src="docs/readme/flow-light.svg" width="100%" alt="Search Apple's catalog, find timed lyrics on LRCLIB, match the same master recording on YouTube Music, then play in sync.">
+</picture>
 
-| A room shaped by the artwork | Lyrics in another language |
-|:---:|:---:|
-| ![Versify player with a cool blue artwork-inspired background](docs/images/versify-artwork-theme.jpg) | ![Synchronized lyrics displayed with Japanese translations](docs/images/versify-translated-lyrics.jpg) |
-| The palette changes with the record. | Optional lyric translation keeps the song in view. |
+Synchronized lyrics only work when the words and the audio describe the *same recording*. Versify holds every step to that:
 
-</div>
-
-## Why Versify
-
-Most large music services are built around expansive catalogs, recommendations, and playlists. Versify takes a smaller, more focused approach: **the lyrics are part of the listening experience, not an afterthought**. The interface gives the song room to breathe, and makes the connection between a lyric and its exact moment in the recording something you can see, hear, and explore.
-
-It is also intentionally flexible about the recording. Rather than pretending every search result has one definitive version, Versify lets you bring a YouTube link when its suggested audio does not fit the lyrics. Favorites and playlists are lightweight browser-based collections, not a new social or account system.
-
-That focus comes with a trade-off: Versify is **not** a licensed, all-in-one streaming catalog. Search results, lyric availability, translations, and playback depend on third-party services, network access, region, and video embed permissions. Read [the details](#a-note-on-music-and-services) before deploying it publicly.
+1. **Search.** Apple's catalog provides the title, artist, album, and exact length. When the US store translates a name (*If there was practice in love*), Versify also looks up the original (*사랑에 연습이 있었다면*).
+2. **Words.** LRCLIB supplies timed lyrics. Credits and remaster labels can differ, but the length must agree within three seconds, or the lyrics are shown untimed rather than out of step.
+3. **Recording.** YouTube Music's official song uploads are the label's master, the same one the lyrics were timed against. Covers, karaoke, live, and sped-up versions are left out.
+4. **In sync.** Each line lands on its moment. If a song still drifts, connect your own recording and adjust the timing by half a second at a time.
 
 ## 의도 · The intention
 
-**Versify의 의도는 음악을 단순히 재생하는 것을 넘어, 가사와 멜로디가 만나는 순간에 더 가까이 머무는 경험을 만드는 것입니다.** 화면을 복잡한 추천이나 피드로 채우기보다, 앨범 아트와 동기화된 가사를 중심에 두어 한 곡을 천천히 듣고 읽을 수 있도록 만들었습니다.
-
-*Versify is meant to bring the listener closer to the moment where lyrics meet melody. Instead of filling the screen with feeds and recommendations, it keeps artwork and synchronized words in focus—making space to listen to one song, and to really read it.*
+> **Versify의 의도는 음악을 단순히 재생하는 것을 넘어, 가사와 멜로디가 만나는 순간에 더 가까이 머무는 경험을 만드는 것입니다.** 화면을 복잡한 추천이나 피드로 채우기보다, 앨범 아트와 동기화된 가사를 중심에 두어 한 곡을 천천히 듣고 읽을 수 있도록 만들었습니다.
+>
+> *Versify is meant to bring the listener closer to the moment where lyrics meet melody. Instead of filling the screen with feeds and recommendations, it keeps artwork and synchronized words in focus, making space to listen to one song and to really read it.*
 
 ## Get started
 
-**Requirements:** Node.js 22.18 or newer and an internet connection.
+Requires **Node.js 22.18** or newer and an internet connection.
 
 ```sh
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [localhost:3000](http://localhost:3000). Search, lyrics, and audio matching work without any keys. Two optional services can be added in `.env.local` (the names are listed in `.env.example`):
 
-The app works without API keys for its built-in featured tracks. To enable the optional services, copy the variable names from `.env.example` into `.env.local` and supply your own keys:
+| Variable | Adds |
+|---|---|
+| `GOOGLE_TRANSLATE_API_KEY` | On-demand lyric translation, using a server-side key with Cloud Translation enabled. |
+| `YOUTUBE_API_KEY` | An extra fallback for audio matching, using a server-side key with YouTube Data API v3 enabled. |
 
-| Variable | Enables | Notes |
-|---|---|---|
-| `YOUTUBE_API_KEY` | Automatic audio matching for other songs | A server-side key with YouTube Data API v3 enabled. Without it, use **Connect audio** to provide a YouTube link. |
-| `GOOGLE_TRANSLATE_API_KEY` | On-demand lyric translation | A server-side key with Google Cloud Translation enabled. |
+Restart the dev server after changing these. Keep real keys out of the repository and set production values in your hosting provider.
 
-Restart the development server after changing environment variables. Keep real keys private; do not commit `.env.local`. Configure production environment variables in your hosting provider.
+## Liner notes
 
-## A note on music and services
+Versify brings together independent services; it does not host or distribute music.
 
-Versify brings together several independent sources; it does not host or distribute music.
+- **Search:** Apple's public iTunes Search API, across the US and Japanese storefronts.
+- **Lyrics:** [LRCLIB](https://lrclib.net). Synchronized lyrics are shown when they match the recording; untimed text is never presented as timed.
+- **Audio:** YouTube's embedded player, preferring official YouTube Music recordings. Availability depends on region and embed permissions, and you can always connect another recording.
+- **Translation:** Optional Google Cloud Translation. Machine translation may miss a lyric's nuance.
+- **Library:** Favorites, playlists, and preferences live in this browser's storage, with no accounts or sync.
 
-- **Song search:** Apple’s public iTunes Search API.
-- **Lyrics:** LRCLIB. Synchronized lyrics are shown when available; unsynchronized text is not presented as if it were timed.
-- **Audio:** YouTube playback through its embedded player. Matching can choose a different edit or master, and availability depends on region, embed permissions, and the browser. You can connect another YouTube recording if needed.
-- **Translation:** Optional Google Cloud Translation. Translations are machine-generated and may not capture a lyric’s full nuance.
-- **Personal library:** Favorites, playlists, and preferences are saved in browser storage on this device. There are no user accounts or cross-device sync.
-
-Availability of these services and their content may change. Check the relevant provider terms and rights before public or commercial use.
+These services and their content can change. Check each provider's terms, and the rights involved, before public or commercial use.
 
 ## For contributors
 
 ```sh
-npm test
-npm run typecheck
-npm run build
+npm test            # unit tests
+npm run typecheck   # TypeScript
+npm run build       # production build
 ```
 
-Built with Next.js, React, TypeScript, and Tailwind CSS. See the project files for the app structure, API routes, and individual UI components.
+Built with Next.js, React, and TypeScript. The README artwork in `docs/readme/` is plain animated SVG, generated by `docs/readme/generate.mjs`.
+
+<br>
+
+<div align="center"><sub>Made for listening · © 2026 Jamie Ryu</sub></div>
