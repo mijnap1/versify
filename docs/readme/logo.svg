@@ -6,14 +6,14 @@
     @media (prefers-reduced-motion: reduce) { .sheen { animation: none; transform: translateX(-260px); } }
   </style>
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fbf6f6"/><stop offset="0.55" stop-color="#f2e3e5"/><stop offset="1" stop-color="#ead6da"/>
+    <linearGradient id="tile" x1="0.12" y1="0" x2="0.88" y2="1">
+      <stop offset="0" stop-color="rgb(206, 237, 254)"/><stop offset="0.53" stop-color="rgb(241, 250, 255)"/><stop offset="1" stop-color="rgb(190, 203, 181)"/>
     </linearGradient>
-    <radialGradient id="bloom" cx="0.3" cy="0.22" r="0.8">
-      <stop offset="0" stop-color="#f1c7cf" stop-opacity="0.55"/><stop offset="1" stop-color="#d9c6ea" stop-opacity="0"/>
+    <radialGradient id="bloom" cx="0.25" cy="0.18" r="0.75">
+      <stop offset="0" stop-color="#5fb0ec" stop-opacity="0.35"/><stop offset="1" stop-color="#5fb0ec" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
     <clipPath id="clip"><rect width="240" height="240" rx="54"/></clipPath>
   </defs>

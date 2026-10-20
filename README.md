@@ -6,19 +6,16 @@
 
 **A quieter way to listen, and a closer way to follow every word.**
 
-<img src="https://img.shields.io/badge/version-1.0.0-c0697f?style=flat" alt="Version 1.0.0">
-<img src="https://img.shields.io/badge/platform-web-c0697f?style=flat" alt="Platform: web">
-<img src="https://img.shields.io/badge/Next.js-16-302a2b?style=flat&logo=nextdotjs&logoColor=white" alt="Next.js 16">
-<img src="https://img.shields.io/badge/lyrics-synced-8a64b8?style=flat" alt="Lyrics: synced">
-<img src="https://img.shields.io/badge/Node-22.18%2B-5b4a52?style=flat&logo=nodedotjs&logoColor=white" alt="Node 22.18+">
+<img src="https://img.shields.io/badge/version-1.0.0-2f86d6?style=flat" alt="Version 1.0.0">
+<img src="https://img.shields.io/badge/platform-web-2f86d6?style=flat" alt="Platform: web">
+<img src="https://img.shields.io/badge/Next.js-16-2c3238?style=flat&logo=nextdotjs&logoColor=white" alt="Next.js 16">
+<img src="https://img.shields.io/badge/lyrics-synced-6f9a5c?style=flat" alt="Lyrics: synced">
+<img src="https://img.shields.io/badge/Node-22.18%2B-3f6e8c?style=flat&logo=nodedotjs&logoColor=white" alt="Node 22.18+">
 
 <br>
 <br>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/readme/hero-dark.svg">
-  <img src="docs/readme/hero-light.svg" width="100%" alt="Versify: a record spins behind its sleeve while lyric lines light up one at a time, in step with the music.">
-</picture>
+<img src="docs/readme/hero.svg" width="100%" alt="Versify playing RUDE! by Hearts2Hearts: a record slides out from a sky-blue sleeve and spins while each lyric line lights up word by word, in time with the song.">
 
 <sub>[Get started](#get-started) &nbsp;·&nbsp; [How it works](#how-a-song-finds-its-words) &nbsp;·&nbsp; [Liner notes](#liner-notes)</sub>
 
