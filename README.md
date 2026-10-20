@@ -4,7 +4,7 @@
 
 # Versify
 
-**A quieter way to listen, and a closer way to follow every word.**
+**Music and lyrics for your desktop, while you do your work.**
 
 <img src="https://img.shields.io/badge/version-1.0.0-2f86d6?style=flat" alt="Version 1.0.0">
 <img src="https://img.shields.io/badge/platform-web-2f86d6?style=flat" alt="Platform: web">
