@@ -139,7 +139,7 @@ export default function Home() {
     const controller = new AbortController();
     videoRequest.current = controller;
     setLyrics(emptyLyrics); setVideoId(null); setMatching(true); setMatchingError(null);
-    const params = new URLSearchParams({ title: track.title, artist: track.artist, album: track.album, duration: String(track.duration) });
+    const params = new URLSearchParams({ id: track.id, title: track.title, artist: track.artist, album: track.album, duration: String(track.duration) });
     async function prepare() {
       let data;
       try {
@@ -193,7 +193,8 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (!initialized || !started || (repeatSong && !queue)) return;
+    // Wait for the current lyrics so next-song lookups don't compete with them for LRCLIB capacity.
+    if (!initialized || !started || (repeatSong && !queue) || lyrics.loading) return;
     const controller = new AbortController();
     setNextSong(null);
     recentSongs.current = rememberSong(recentSongs.current, track);
@@ -206,7 +207,7 @@ export default function Home() {
           const song = { ...entry.track, videoId: undefined as string | undefined };
           let lyrics;
           try {
-            const params = new URLSearchParams({ title: song.title, artist: song.artist, album: song.album, duration: String(song.duration) });
+            const params = new URLSearchParams({ id: song.id, title: song.title, artist: song.artist, album: song.album, duration: String(song.duration) });
             const lyricResponse = await fetch(`/api/lyrics?${params}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
             if (!lyricResponse.ok) throw new Error("Lyrics unavailable");
             lyrics = await lyricResponse.json();
@@ -231,7 +232,7 @@ export default function Home() {
     }
     prepareNext().catch((error: Error) => { if (!controller.signal.aborted) setNextSong({ ...context, error: error.message }); });
     return () => controller.abort();
-  }, [initialized, started, repeat, repeatSong, track.id, track.artist, track.title, queue, playbackVersion]);
+  }, [initialized, started, repeat, repeatSong, track.id, track.artist, track.title, queue, playbackVersion, lyrics.loading]);
 
   useEffect(() => {
     if (queue && (player.error || (!matching && matchingError && !videoId)) && !queue.failed.includes(track.id)) setQueue({ ...queue, failed: [...queue.failed, track.id] });

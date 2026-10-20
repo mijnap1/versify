@@ -45,7 +45,7 @@ export async function GET() {
     try {
       const lyrics = await findLyrics(track, AbortSignal.timeout(5000));
       if (!hasTimedLyrics(lyrics, track.duration)) continue;
-      const videoId = await findAudioVideo({ ...track, language: lyricLanguage(lyrics) });
+      const videoId = await findAudioVideo({ ...track, language: lyricLanguage(lyrics) }, AbortSignal.timeout(8000));
       if (!videoId) continue;
       return NextResponse.json({ track: { ...track, videoId }, lyrics: { syncedLyrics: lyrics.syncedLyrics, plainLyrics: lyrics.plainLyrics ?? null, instrumental: false } }, { headers: { "Cache-Control": "no-store" } });
     } catch { /* Skip unavailable or untimed recordings. */ }

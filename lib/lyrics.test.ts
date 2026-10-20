@@ -20,7 +20,7 @@ test("incomplete timing falls back to full plain lyrics, including when search f
   const incomplete = { trackName: "Song", artistName: "Artist", duration: 200,
     syncedLyrics: "[00:02]Intro", plainLyrics: "Intro\nSecond\nThird\nFourth\nFifth\nSixth", instrumental: false };
   let failSearch = false;
-  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => String(input).includes("/get?")
+  t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => /\/get(?:-cached)?\?/.test(String(input))
     ? Response.json(incomplete) : failSearch ? new Response(null, { status: 502 }) : Response.json([incomplete]));
   const track = { title: "Song", artist: "Artist", album: "Album", duration: 200 };
   assert.deepEqual(await findLyrics(track), { syncedLyrics: null, plainLyrics: incomplete.plainLyrics, instrumental: false });
@@ -42,7 +42,9 @@ test("random starters require multiple distinct timed vocal lines", () => {
   assert.equal(hasTimedLyrics({ syncedLyrics }, 15), false);
   assert.equal(hasTimedLyrics({ syncedLyrics: null }, 180), false);
 });
-import { chooseAudioVideo, correctedVideoId, findAudioVideo, youtubeCandidatesFromHtml, youtubeResultIdsFromHtml, type VideoCandidate } from "./video-match.ts";
+import { chooseAudioVideo, chooseMusicTrack, correctedVideoId, findAudioVideo, isBackingTrack, musicTracksFromResponse, youtubeCandidatesFromHtml, youtubeResultIdsFromHtml, type VideoCandidate } from "./video-match.ts";
+import { baseTitle, primaryArtist, sameArtist, titleMatch } from "./song-match.ts";
+import { rankLyricEntries } from "./lyric-source.ts";
 
 test("audio matching prefers album-length lyrics over music videos and altered recordings", () => {
   const video = (id: string, title: string, duration: string, embeddable = true): VideoCandidate => ({ id, snippet: { title }, contentDetails: { duration }, status: { embeddable } });
@@ -110,6 +112,7 @@ test("both YouTube search paths carry the lyric language and reject wrong-langua
   const queries: string[] = [];
   const fetchMock = t.mock.method(globalThis, "fetch", async (input: string | URL | Request) => {
     const url = new URL(String(input));
+    if (url.hostname === "music.youtube.com") return Response.json({});
     if (url.pathname.endsWith("/search")) {
       queries.push(url.searchParams.get("q")!);
       return Response.json({ items: [{ id: { videoId: "wrong" } }] });
@@ -121,7 +124,65 @@ test("both YouTube search paths carry the lyric language and reject wrong-langua
   assert.equal(await findAudioVideo({ title: "Love Shot", artist: "EXO", duration: 200, language: "ko" }), "correct");
   assert.equal(queries.length, 4);
   assert.ok(queries.every((query) => query.includes("Korean version")));
-  assert.equal(fetchMock.mock.callCount(), 7);
+  // One YouTube Music lookup (no official song found), three API searches with details, then one public search.
+  assert.equal(fetchMock.mock.callCount(), 8);
+});
+
+test("YouTube Music songs match the catalog recording, not covers, karaoke, or other edits", () => {
+  const item = (id: string, title: string, subtitle: string) => ({ musicResponsiveListItemRenderer: {
+    playlistItemData: { videoId: id },
+    flexColumns: [title, subtitle].map((text) => ({ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text }] } } })),
+  } });
+  const tracks = musicTracksFromResponse({ contents: [
+    item("cover0000aa", "Mr. Brightside", "Sinclair & The Acoustic Room • Mr. Brightside • 3:44"),
+    item("karaoke00aa", "Mr. Brightside (Made Popular By The Killers) [Karaoke Version]", "Party Tyme Karaoke • Variety Male Hits 1 • 3:43"),
+    item("remaster0aa", "Mr. Brightside (Remastered)", "The Killers • Direct Hits • 3:43"),
+    item("original0aa", "Mr. Brightside", "The Killers • Hot Fuss • 3:43"),
+    item("live000000a", "Mr. Brightside (Live)", "The Killers • Live • 3:43"),
+  ] });
+  assert.deepEqual(tracks[3], { id: "original0aa", title: "Mr. Brightside", artist: "The Killers", album: "Hot Fuss", duration: 223 });
+  assert.equal(chooseMusicTrack(tracks, { title: "Mr. Brightside", artist: "The Killers", album: "Hot Fuss", duration: 223.97 }), "original0aa");
+  assert.equal(chooseMusicTrack(tracks, { title: "Mr. Brightside", artist: "The Killers", album: "Direct Hits", duration: 223.97 }), "remaster0aa");
+  assert.equal(chooseMusicTrack(tracks, { title: "Mr. Brightside", artist: "The Killers", duration: 240 }), null);
+  const korean = musicTracksFromResponse({ contents: [item("japanese0aa", "Ditto (Japanese ver.)", "NewJeans • Ditto • 3:06"), item("korean000aa", "Ditto", "NewJeans • OMG • 3:06")] });
+  assert.equal(chooseMusicTrack(korean, { title: "Ditto", artist: "NewJeans", duration: 186, language: "ko" }), "korean000aa");
+  const alias = musicTracksFromResponse({ contents: [item("bolbbalgan4", "사랑에 빠졌을 때 When I Fall in Love", "Bolbbalgan4 • RED PLANET • 3:51")] });
+  assert.equal(chooseMusicTrack(alias, { title: "When I Fall In Love", artist: "BOL4", album: "Full Album RED PLANET", duration: 230.5 }), "bolbbalgan4");
+  assert.equal(chooseMusicTrack(alias, { title: "When I Fall In Love", artist: "BOL4", album: "Another Album", duration: 230.5 }), null);
+  assert.equal(chooseMusicTrack(tracks.slice(0, 1), { title: "Mr. Brightside", artist: "The Killers", album: "Hot Fuss", duration: 223.97 }), null);
+  assert.equal(isBackingTrack("Mr. Brightside"), false);
+  assert.equal(isBackingTrack("사랑하지 않아서 그랬어 (MR)"), true);
+});
+
+test("catalog names compare featured artists, collaborators, and remaster labels loosely", () => {
+  assert.equal(baseTitle("Bye Bye (feat. Lee Mujin)"), "Bye Bye");
+  assert.equal(baseTitle("Hey Jude - Remastered 2015"), "Hey Jude");
+  assert.equal(baseTitle("Golden feat. EJAE, AUDREY NUNA"), "Golden");
+  assert.equal(baseTitle("Love Story (Taylor’s Version)"), "Love Story (Taylor’s Version)");
+  assert.equal(titleMatch("STAY", "STAY (with Justin Bieber) - The Kid LAROI, Justin Bieber"), "partial");
+  assert.equal(titleMatch("Love Story (Taylor’s Version)", "Love Story"), "partial");
+  assert.equal(titleMatch("Flowers", "Roses"), null);
+  assert.ok(sameArtist("HUNTR/X, EJAE, AUDREY NUNA, REI AMI & KPop Demon Hunters Cast", "HUNTR/X"));
+  assert.ok(sameArtist("Lady Gaga & Bruno Mars", "Bruno Mars"));
+  assert.ok(!sameArtist("IU", "Liquid"));
+  assert.ok(sameArtist("Jaehyun Lim", "Lim Jae Hyun"));
+  assert.ok(!sameArtist("Jaehyun Lim", "Hickee"));
+  assert.equal(primaryArtist("The Kid LAROI & Justin Bieber"), "The Kid LAROI");
+});
+
+test("LRCLIB entries rank synced, same-length recordings above plain or different edits", () => {
+  const lrc = Array.from({ length: 12 }, (_, i) => `[0${Math.floor(i * 15 / 60)}:${String(i * 15 % 60).padStart(2, "0")}.00]Line ${i}`).join("\n");
+  const entry = (trackName: string, artistName: string, duration: number, synced = true) => ({ trackName, artistName, duration, instrumental: false,
+    syncedLyrics: synced ? lrc : null, plainLyrics: Array.from({ length: 12 }, (_, i) => `Line ${i}`).join("\n") });
+  const track = { title: "Die With A Smile", artist: "Lady Gaga & Bruno Mars", album: "Die With A Smile", duration: 252 };
+  const ranked = rankLyricEntries([
+    entry("Die With A Smile", "Lady Gaga", 252, false),
+    entry("Die With A Smile (Live)", "Lady Gaga", 290),
+    entry("Lady Gaga, Bruno Mars - Die With A Smile", "Lady Gaga", 253),
+    entry("Die With A Smile", "Cover Band", 260),
+  ], track);
+  assert.deepEqual(ranked.map((item) => item.duration), [253, 252]);
+  assert.equal(rankLyricEntries([entry("Different Song", "Lady Gaga", 252)], track).length, 0);
 });
 
 test("public YouTube results use recording metadata rather than the first video ID", () => {

@@ -1,4 +1,6 @@
 import { featuredMatch } from "./tracks.ts";
+import { baseTitle, normalized, primaryArtist, sameArtist, titleMatch } from "./song-match.ts";
+import { localizedNames } from "./catalog-names.ts";
 
 export type VideoCandidate = {
   id: string;
@@ -7,9 +9,7 @@ export type VideoCandidate = {
   status: { embeddable: boolean };
 };
 
-const normalized = (text: string) => text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
-
-type AudioTrack = { title: string; artist: string; language?: string | null };
+type AudioTrack = { id?: string; title: string; artist: string; album?: string; language?: string | null };
 export const audioLanguages: Record<string, string> = { ko: "Korean", ja: "Japanese", zh: "Chinese", en: "English", es: "Spanish", fr: "French", pt: "Portuguese" };
 
 const versionLabels: Record<string, string> = {
@@ -34,7 +34,9 @@ function recordingTitle(title: string) {
 }
 
 export function isBackingTrack(title: string, channel = "") {
-  return /karaoke|instrumental|\binst\b|\bmr\b|backing track|off[\s-]*vocal|without vocals|노래방|반주|カラオケ|伴奏|금영|tj\s*미디어/i.test(`${title} ${channel}`);
+  // Korean "MR" marks an instrumental; it is uppercase and never "Mr." as in "Mr. Brightside".
+  return /karaoke|instrumental|\binst\b|backing track|off[\s-]*vocal|without vocals|노래방|반주|カラオケ|伴奏|금영|tj\s*미디어/i.test(`${title} ${channel}`)
+    || /\bMR\b(?!\.)/.test(title);
 }
 
 function verifiedBalladAudio(track: { title: string; artist: string }) {
@@ -133,6 +135,88 @@ async function findPublicYouTubeVideo(query: string, track: AudioTrack & { durat
   }
 }
 
+export type MusicTrack = { id: string; title: string; artist: string; album: string; duration: number };
+
+// YouTube Music "Songs" results are label-delivered masters: the same edit Apple lists and LRCLIB is timed against.
+export function musicTracksFromResponse(data: unknown): MusicTrack[] {
+  const tracks: MusicTrack[] = [];
+  const text = (column: any): string => column?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((run: { text: string }) => run.text).join("") ?? "";
+  function visit(value: unknown) {
+    if (!value || typeof value !== "object") return;
+    const item = (value as Record<string, any>).musicResponsiveListItemRenderer;
+    if (item) {
+      const id = item.playlistItemData?.videoId ?? item.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+      const parts = text(item.flexColumns?.[1]).split(" • ");
+      const time = parts.findLastIndex((part) => /^\d+(?::\d{2}){1,2}$/.test(part));
+      if (typeof id === "string" && /^[\w-]{11}$/.test(id) && time >= 1) {
+        const duration = parts[time].split(":").map(Number).reduce((total, part) => total * 60 + part, 0);
+        const album = time >= 2 ? parts[time - 1] : "";
+        tracks.push({ id, title: text(item.flexColumns[0]), artist: parts.slice(0, time >= 2 ? time - 1 : time).join(" • "), album, duration });
+      }
+      return;
+    }
+    Object.values(value).forEach(visit);
+  }
+  visit(data);
+  return tracks;
+}
+
+const alteredRecording = /\b(?:live|remix|acoustic|instrumental|cover|sped up|slowed|nightcore|demo)\b/i;
+
+export function chooseMusicTrack(tracks: MusicTrack[], track: AudioTrack & { duration: number }): string | null {
+  const wanted = track.language || versionLanguage(track.title);
+  const ranked = tracks.flatMap((candidate) => {
+    const difference = track.duration > 0 ? Math.abs(candidate.duration - track.duration) : 0;
+    if (difference > 3 || isBackingTrack(candidate.title, candidate.artist)) return [];
+    if (alteredRecording.test(candidate.title) && !alteredRecording.test(track.title)) return [];
+    const version = versionLanguage(candidate.title);
+    if (version && version !== wanted) return [];
+    const title = titleMatch(track.title, candidate.title);
+    if (!title) return [];
+    const [expectedAlbum, candidateAlbum] = [normalized(track.album ?? ""), normalized(candidate.album)];
+    const album = !expectedAlbum || !candidateAlbum ? null : expectedAlbum === candidateAlbum ? "exact"
+      : candidateAlbum.length >= 3 && expectedAlbum.length >= 3 && (expectedAlbum.includes(candidateAlbum) || candidateAlbum.includes(expectedAlbum)) ? "partial" : null;
+    const artist = sameArtist(track.artist, candidate.artist);
+    // Catalogs credit K-pop acts under different names (BOL4 / Bolbbalgan4 / 볼빨간사춘기);
+    // the same release and length confirm it, while title and length alone could be a cover.
+    if (!artist && (!album || difference > 1.5)) return [];
+    return [{ id: candidate.id, score: (title === "exact" ? 30 : 0) + (album === "exact" ? 15 : album ? 10 : 0) + (artist ? 20 : 0) - difference * 10 }];
+  });
+  ranked.sort((a, b) => b.score - a.score);
+  return ranked[0]?.id ?? null;
+}
+
+async function searchMusicTracks(query: string, signal?: AbortSignal): Promise<MusicTrack[]> {
+  try {
+    const response = await fetch("https://music.youtube.com/youtubei/v1/search?prettyPrint=false", {
+      method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0", Origin: "https://music.youtube.com" },
+      body: JSON.stringify({ context: { client: { clientName: "WEB_REMIX", clientVersion: "1.20250101.01.00", hl: "en", gl: "US" } },
+        query, params: "EgWKAQIIAWoMEA4QChADEAQQCRAF" }), // "Songs" filter
+      next: { revalidate: 86400 }, signal: AbortSignal.any([AbortSignal.timeout(8000), ...(signal ? [signal] : [])]),
+    });
+    return response.ok ? musicTracksFromResponse(await response.json()) : [];
+  } catch { return []; }
+}
+
+async function findMusicTrack(track: AudioTrack & { duration: number }, signal?: AbortSignal) {
+  const query = (names: AudioTrack) => [`${names.artist} ${names.title}`, `${primaryArtist(names.artist)} ${baseTitle(names.title)}`];
+  const queries = [...new Set(query(track))];
+  let variants: AudioTrack[] | undefined;
+  for (let index = 0; index < queries.length; index++) {
+    if (signal?.aborted) return null;
+    const results = await searchMusicTracks(queries[index], signal);
+    let id = chooseMusicTrack(results, track);
+    // YouTube Music often returns the right song under its native name; check those before searching again.
+    if (!id && !variants) {
+      variants = (await localizedNames({ ...track, album: track.album ?? "" }, signal).catch(() => [])).map((names) => ({ ...track, ...names }));
+      for (const variant of variants) queries.push(...query(variant).filter((item) => !queries.includes(item)));
+    }
+    for (const variant of variants ?? []) id ??= chooseMusicTrack(results, { ...variant, duration: track.duration });
+    if (id) return id;
+  }
+  return null;
+}
+
 export async function findAudioVideo(track: AudioTrack & { duration: number }, signal?: AbortSignal) {
   const language = track.language || versionLanguage(track.title);
   track = { ...track, language };
@@ -140,6 +224,9 @@ export async function findAudioVideo(track: AudioTrack & { duration: number }, s
   if (featured?.videoId && (!language || language === "en")) return featured.videoId;
   const known = knownAudioVideo(track);
   if (known && (!language || language === (verifiedBalladAudio(track) ? "ko" : "en"))) return known;
+
+  const official = await findMusicTrack(track, signal);
+  if (official) return official;
 
   const key = process.env.YOUTUBE_API_KEY;
   const title = `${recordingTitle(track.title)} ${language ? `${audioLanguages[language] ?? language} version` : ""}`.trim();
