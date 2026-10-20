@@ -30,15 +30,15 @@ Pick a song and read along. Versify plays the lyrics in time with the music, rig
 
 ## Side A
 
-| No. | Track | Liner note |
-|:---:|---|---|
-| 01 | **Find the song you mean** | Search Apple's catalog, including artists only sold in Japan, and pick the exact recording. |
-| 02 | **Follow every word** | Timed lyrics glow and scroll with playback. Tap a line to jump there, or scroll back and read at your own pace. |
-| 03 | **Hear the right version** | Versify plays the official master the lyrics were timed to. Wrong edit? Connect any YouTube link and nudge the timing. |
-| 04 | **Read it in your language** | Optional translations sit beneath each line: Korean, Japanese, Chinese, French, Spanish, or Portuguese. |
-| 05 | **Keep a small library** | Save favorites, build and rename playlists, shuffle and loop them. Everything stays in this browser, with no account. |
-| 06 | **Let the artwork set the room** | The palette is drawn from the sleeve. Choose the lyric size and a 12- or 24-hour clock, then go fullscreen. |
-| 07 | **Never run out** | When a song ends, the next one comes from the same genre and its charts. |
+| Feature | What it does |
+|---|---|
+| **Find a song** | Search by song or artist and choose a recording. |
+| **Follow the lyrics** | Lyrics scroll with the music. Click a line to jump to it, or scroll through them yourself. |
+| **Change the audio** | Wrong version? Add a YouTube link and adjust the lyric timing. |
+| **Translate the lyrics** | Show translations under each line in Korean, Japanese, Chinese, French, Spanish, or Portuguese. |
+| **Save your favorites** | Make playlists, shuffle, and repeat. Everything is saved in your browser—no account needed. |
+| **Make it yours** | Colors match the album art. Adjust the lyric size, change the clock format, or go fullscreen. |
+| **Keep listening** | When a song ends, Versify finds another one to play. |
 
 ## How a song finds its words
 
