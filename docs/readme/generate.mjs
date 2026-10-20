@@ -219,6 +219,41 @@ function flow(name, t) {
 `;
 }
 
+// The app icon on a light tile, so the black mark reads on GitHub's light and dark themes alike.
+function logo() {
+  const mark = readFileSync(join(root, "app/apple-icon.png")).toString("base64");
+  const t = themes.light;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-labelledby="title">
+  <title id="title">Versify</title>
+  <style>
+    .sheen { animation: sheen 7s ${ease} infinite; }
+    @keyframes sheen { 0%, 62% { transform: translateX(-260px); } 100% { transform: translateX(260px); } }
+    @media (prefers-reduced-motion: reduce) { .sheen { animation: none; transform: translateX(-260px); } }
+  </style>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbf6f6"/><stop offset="0.55" stop-color="${t.bg[1]}"/><stop offset="1" stop-color="${t.bg[2]}"/>
+    </linearGradient>
+    <radialGradient id="bloom" cx="0.3" cy="0.22" r="0.8">
+      <stop offset="0" stop-color="${t.blobs[0]}" stop-opacity="0.55"/><stop offset="1" stop-color="${t.blobs[1]}" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="clip"><rect width="240" height="240" rx="54"/></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect width="240" height="240" fill="url(#tile)"/>
+    <rect width="240" height="240" fill="url(#bloom)"/>
+    <image href="data:image/png;base64,${mark}" x="45" y="45" width="150" height="150"/>
+    <g transform="rotate(20 120 120)"><rect class="sheen" x="75" y="-60" width="90" height="360" fill="url(#sheen)" opacity="0.7"/></g>
+  </g>
+  <rect x="0.75" y="0.75" width="238.5" height="238.5" rx="53.5" fill="none" stroke="#ffffff" stroke-opacity="0.8" stroke-width="1.5"/>
+</svg>
+`;
+}
+writeFileSync(join(out, "logo.svg"), logo());
+
 for (const [name, theme] of Object.entries(themes)) {
   writeFileSync(join(out, `hero-${name}.svg`), hero(name, theme));
   writeFileSync(join(out, `flow-${name}.svg`), flow(name, theme));
