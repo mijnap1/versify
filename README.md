@@ -49,7 +49,7 @@ Pick a song and read along. Versify plays the lyrics in time with the music, rig
 
 Synchronized lyrics only work when the words and the audio describe the *same recording*. Versify holds every step to that:
 
-1. **Search.** Apple's catalog provides the title, artist, album, and exact length. When the US store translates a name (*If there was practice in love*), Versify also looks up the original (*사랑에 연습이 있었다면*).
+1. **Search.** Apple's catalog provides the title, artist, album, and exact length.
 2. **Words.** LRCLIB supplies timed lyrics. Credits and remaster labels can differ, but the length must agree within three seconds, or the lyrics are shown untimed rather than out of step.
 3. **Recording.** YouTube Music's official song uploads are the label's master, the same one the lyrics were timed against. Covers, karaoke, live, and sped-up versions are left out.
 4. **In sync.** Each line lands on its moment.
@@ -57,11 +57,8 @@ Synchronized lyrics only work when the words and the audio describe the *same re
 > [!TIP]
 > If a song still drifts, choose **Change source**, paste another YouTube recording, and set **Lyric timing** in half-second steps until the words land.
 
-## 의도 · The intention
-
-> **Versify의 의도는 음악을 단순히 재생하는 것을 넘어, 가사와 멜로디가 만나는 순간에 더 가까이 머무는 경험을 만드는 것입니다.** 화면을 복잡한 추천이나 피드로 채우기보다, 앨범 아트와 동기화된 가사를 중심에 두어 한 곡을 천천히 듣고 읽을 수 있도록 만들었습니다.
->
-> *Versify is meant to bring the listener closer to the moment where lyrics meet melody. Instead of filling the screen with feeds and recommendations, it keeps artwork and synchronized words in focus, making space to listen to one song and to really read it.*
+## Why I made this
+> I made Versify to keep on my desktop while I study or do other things. Just music, album art, and lyrics I can glance at whenever I want.
 
 ## Get started
 
