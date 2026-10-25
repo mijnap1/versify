@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { ArrowUpLeft, LoaderCircle, Search, X } from "lucide-react";
+import { textLang } from "@/lib/lyrics";
 import type { Track } from "@/lib/tracks";
 
 export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (track: Track) => void }) {
@@ -73,7 +74,7 @@ export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (trac
         {tracks.map((track, index) => <li key={track.id} id={`track-result-${index}`} role="option" aria-selected={index === active}>
           <button className={`search-result ${index === active ? "highlighted" : ""}`} onClick={() => select(track)} onMouseEnter={() => setActive(index)}>
             {track.artwork ? <img src={track.artwork} alt="" width={42} height={42} /> : <span className="result-artwork-placeholder" />}
-            <span className="result-copy"><strong>{track.title}</strong><span>{track.artist}</span></span>
+            <span className="result-copy" lang={textLang(`${track.title} ${track.artist}`)}><strong>{track.title}</strong><span>{track.artist}</span></span>
             <ArrowUpLeft size={16} />
           </button>
         </li>)}

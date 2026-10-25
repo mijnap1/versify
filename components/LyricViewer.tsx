@@ -3,7 +3,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { AudioLines, RotateCcw } from "lucide-react";
 import { languages, type Settings } from "@/lib/settings";
-import { formatTime, type LyricLine } from "@/lib/lyrics";
+import { formatTime, textLang, type LyricLine } from "@/lib/lyrics";
 
 type Props = { lines: LyricLine[]; plainLyrics: string | null; active: number; offset: number; loading: boolean; error: string | null; instrumental: boolean; onSeek: (time: number) => void; onRetry: () => void; canSeek: boolean; fullscreen: boolean; translating: boolean; language: Settings["language"]; lyricScale: number };
 
@@ -65,7 +65,7 @@ export const LyricViewer = memo(function LyricViewer({ lines, plainLyrics, activ
   return <div className="lyric-viewer">
     {translating && !loading && !translations && <p className="translation-status" role="status">{translationError || `Translating to ${languages[language]}…`}</p>}
     <div className="lyric-scroll" ref={viewport} onWheel={stopFollowing} onTouchStart={stopFollowing} onKeyDown={(event) => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) stopFollowing(); }} tabIndex={0} aria-label="Song lyrics">
-      <div className="lyric-lines">
+      <div className="lyric-lines" lang={textLang(source)}>
         {lines.length ? <>
           {lines.map((line, index) => <button key={`${line.time}-${index}`} data-line={index} data-distance={Math.min(3, Math.abs(index - Math.max(0, active)))}
             className={`lyric-line ${index === active ? "active" : ""} ${active === -1 && index === 0 ? "upcoming" : ""} ${index < active ? "past" : ""}`}

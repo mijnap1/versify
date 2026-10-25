@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "@fontsource-variable/manrope";
+import "@fontsource-variable/noto-sans-jp";
 import "./globals.css";
 
 export const metadata: Metadata = {

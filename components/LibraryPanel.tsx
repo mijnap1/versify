@@ -3,6 +3,7 @@
 import { ArrowLeft, Check, ChevronRight, Heart, ListMusic, Pencil, Play, Plus, Shuffle, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { uniqueTracks, type Playlist } from "@/lib/playlists";
+import { textLang } from "@/lib/lyrics";
 import type { Track } from "@/lib/tracks";
 
 type Props = {
@@ -76,7 +77,7 @@ export function LibraryPanel({ playlists, favorites, current, playingId, playing
       <ul className="favorites-list">{playlist.tracks.map((song) => <li key={song.id} className={playingId === song.id ? "is-current" : ""}>
         <button className="search-result" aria-current={playingId === song.id ? "true" : undefined} onClick={() => onPlay(playlist, false, song.id)}>
           {song.artwork && <img src={song.artwork} alt="" width={42} height={42} />}
-          <span className="result-copy"><strong>{song.title}</strong><span>{song.artist}</span></span>
+          <span className="result-copy" lang={textLang(`${song.title} ${song.artist}`)}><strong>{song.title}</strong><span>{song.artist}</span></span>
           {playingId === song.id && <span className={`playing-mark ${playing && visible ? "is-playing" : ""}`} aria-label="Current song"><i /><i /><i /></span>}
         </button>
         <button className="icon-button" aria-label={`Add ${song.title} to another playlist`} onClick={() => { setAdding(song); setNotice(""); }}><Plus size={16} /></button>

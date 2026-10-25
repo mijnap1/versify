@@ -12,7 +12,7 @@ import { SearchBar } from "@/components/SearchBar";
 import { LyricViewer } from "@/components/LyricViewer";
 import { PlayerControls } from "@/components/PlayerControls";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
-import { activeLyricIndex, lyricLanguage, parseLrc, youtubeId, type LyricLine } from "@/lib/lyrics";
+import { activeLyricIndex, lyricLanguage, parseLrc, textLang, youtubeId, type LyricLine } from "@/lib/lyrics";
 import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
 import { featuredTracks, type Track } from "@/lib/tracks";
 import { rememberSong, type PlayedSong } from "@/lib/playback-history";
@@ -337,7 +337,7 @@ export default function Home() {
               <div className="artwork-fallback" role="img" aria-label="Album artwork unavailable"><span>{track.title}</span></div>}
           </div>
         </div>
-        <div className="track-info" key={`info-${track.id}`}>
+        <div className="track-info" key={`info-${track.id}`} lang={textLang(`${track.title} ${track.artist}`)}>
           <h1>{track.title}</h1>
           <div className="artist-row">
             <p>{track.artist}</p>

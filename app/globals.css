@@ -42,6 +42,9 @@
 * { box-sizing: border-box; letter-spacing: 0; }
 html, body { margin: 0; min-height: 100%; background: #f5eeee; }
 body { color: var(--ink); font-family: "Manrope Variable", Arial, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }
+/* One font for all Japanese text, so kanji and kana share a weight; descendants in another language (translations) go back to the default. */
+:lang(ja) { font-family: "Manrope Variable", "Noto Sans JP Variable", sans-serif; }
+:lang(ja) [lang]:not(:lang(ja)) { font-family: "Manrope Variable", Arial, sans-serif; }
 body { user-select: none; -webkit-user-select: none; }
 .track-info h1, .artist-row > p, input, textarea, [contenteditable="true"] { user-select: text; -webkit-user-select: text; }
 button, input { font: inherit; }

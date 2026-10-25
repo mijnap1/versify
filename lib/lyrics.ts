@@ -10,6 +10,11 @@ export function lyricLanguage(lyrics: { syncedLyrics?: string | null; plainLyric
   return null;
 }
 
+// Kana means Japanese, so kanji in the same text should use Japanese glyphs and weights, not a Chinese fallback font.
+export function textLang(text: string): "ja" | undefined {
+  return /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text) ? "ja" : undefined;
+}
+
 export function parseLrc(lrc: string): LyricLine[] {
   const offset = Number(lrc.match(/\[offset:([+-]?\d+)\]/i)?.[1] ?? 0) / 1000;
   return lrc.split(/\r?\n/).flatMap((line) => {
