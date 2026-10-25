@@ -37,7 +37,7 @@ Pick a song and read along. Versify plays the lyrics in time with the music, rig
 | **Change the audio** | Wrong version? Add a YouTube link and adjust the lyric timing. |
 | **Translate the lyrics** | Show translations under each line in Korean, Japanese, Chinese, French, Spanish, or Portuguese. |
 | **Save your favorites** | Make playlists, shuffle, and repeat. Everything is saved in your browser—no account needed. |
-| **Make it yours** | Colors match the album art. Adjust the lyric size, change the clock format, or go fullscreen. |
+| **Make it yours** | Colors match the album art, by day or by night. Adjust the lyric size, change the clock format, or go fullscreen. |
 | **Keep listening** | When a song ends, Versify finds another one to play. |
 
 ## How a song finds its words

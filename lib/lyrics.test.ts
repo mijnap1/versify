@@ -220,15 +220,18 @@ test("album palettes keep the sleeve's color while ignoring white text and trans
     160, 32, 48, 255, 160, 32, 48, 255,
     255, 255, 255, 255, 0, 255, 0, 0,
   ]));
-  const channels = colored[0].match(/\d+/g)!.map(Number);
+  const channels = colored.light[0].match(/\d+/g)!.map(Number);
   assert.ok(channels[0] > channels[1] && channels[0] > channels[2]);
   assert.ok(channels.every((channel) => channel >= 168));
+  const night = colored.dark[0].match(/\d+/g)!.map(Number);
+  assert.ok(night[0] > night[1] && night[0] > night[2], "Night keeps the sleeve's hue.");
+  assert.ok(night.every((channel) => channel <= 80), "Night sinks the colour toward black.");
   assert.deepEqual(artworkPalette(new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255])), artworkPalette(new Uint8ClampedArray()));
   const blueAndPink = artworkPalette(new Uint8ClampedArray([
     50, 150, 210, 255, 50, 150, 210, 255, 50, 150, 210, 255,
     190, 215, 240, 255, 190, 215, 240, 255,
     220, 80, 160, 255, 220, 80, 160, 255,
   ]));
-  const accent = blueAndPink[2].match(/\d+/g)!.map(Number);
+  const accent = blueAndPink.light[2].match(/\d+/g)!.map(Number);
   assert.ok(accent[0] > accent[2], "The accent should pick pink rather than pale blue cloud pixels.");
 });

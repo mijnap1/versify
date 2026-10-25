@@ -1,6 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
-import { languages, type Settings } from "@/lib/settings";
+import { languages, themes, type Settings } from "@/lib/settings";
 
 function SettingPicker({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (value: string) => void }) {
   const id = useId();
@@ -42,6 +42,9 @@ function SettingPicker({ label, value, options, onChange }: { label: string; val
 export function SettingsPanel({ settings, onChange, error }: { settings: Settings; onChange: (settings: Settings) => void; error: string }) {
   return <div className="settings-panel">
     <div className="settings-card">
+      <section className="settings-section"><div className="settings-label"><div><h3>Appearance</h3></div></div>
+        <SettingPicker label="Appearance" value={settings.theme} options={Object.entries(themes)} onChange={(value) => onChange({ ...settings, theme: value as Settings["theme"] })} />
+      </section>
       <section className="settings-section"><div className="settings-label"><div><h3>Clock</h3></div></div>
         <SettingPicker label="Clock format" value={settings.hour12 ? "12" : "24"} options={[["24", "24-hour"], ["12", "12-hour"]]} onChange={(value) => onChange({ ...settings, hour12: value === "12" })} />
       </section>

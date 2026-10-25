@@ -4,8 +4,8 @@ import { POST } from "../app/api/translate/route.ts";
 import { readSettings, languages } from "./settings.ts";
 
 test("settings reject invalid saved values and preserve supported preferences", () => {
-  assert.deepEqual(readSettings({ hour12: true, language: "ja", lyricScale: 1.3 }), { hour12: true, language: "ja", lyricScale: 1.3 });
-  assert.deepEqual(readSettings({ language: "invalid", lyricScale: 0.5 }), { hour12: false, language: "ko", lyricScale: 1 });
+  assert.deepEqual(readSettings({ hour12: true, language: "ja", lyricScale: 1.3, theme: "dark" }), { hour12: true, language: "ja", lyricScale: 1.3, theme: "dark" });
+  assert.deepEqual(readSettings({ language: "invalid", lyricScale: 0.5, theme: "sepia" }), { hour12: false, language: "ko", lyricScale: 1, theme: "system" });
 });
 
 test("translation preserves blank and repeated lines, and handles provider failure", async () => {

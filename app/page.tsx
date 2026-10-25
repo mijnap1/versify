@@ -13,7 +13,7 @@ import { LyricViewer } from "@/components/LyricViewer";
 import { PlayerControls } from "@/components/PlayerControls";
 import { useYouTubePlayer } from "@/hooks/useYouTubePlayer";
 import { activeLyricIndex, lyricLanguage, parseLrc, textLang, youtubeId, type LyricLine } from "@/lib/lyrics";
-import { artworkPalette, defaultPalette, type WallpaperPalette } from "@/lib/artwork";
+import { artworkPalette, defaultPalette, type ThemedPalette } from "@/lib/artwork";
 import { featuredTracks, type Track } from "@/lib/tracks";
 import { rememberSong, type PlayedSong } from "@/lib/playback-history";
 
@@ -24,6 +24,7 @@ const emptyLyrics: LyricsState = { lines: [], plain: null, instrumental: false, 
 export default function Home() {
   const [settings, setSettings] = useState(defaultSettings);
   const [settingsError, setSettingsError] = useState("");
+  const [initialized, setInitialized] = useState(false);
   const [activePanel, setActivePanel] = useState<"lyrics" | "favorites" | "settings">("lyrics");
   const panelRef = useRef<HTMLElement>(null);
   function closePanel() {
@@ -38,13 +39,26 @@ export default function Home() {
     try { setSettings(readSettings(JSON.parse(localStorage.getItem("verse-settings") || "{}"))); }
     catch { setSettingsError("Settings could not be restored."); }
   }, []);
+  // The layout's inline script picked the first theme; adopt it so the wallpaper starts on the right palette.
+  const [theme, setTheme] = useState<"light" | "dark">(() => typeof document !== "undefined" && document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+  useEffect(() => {
+    if (!initialized) return; // until the saved settings load, keep what the inline script chose
+    const system = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const next = settings.theme === "system" ? (system.matches ? "dark" : "light") : settings.theme;
+      document.documentElement.dataset.theme = next;
+      setTheme(next);
+    };
+    apply();
+    system.addEventListener("change", apply);
+    return () => system.removeEventListener("change", apply);
+  }, [settings.theme, initialized]);
   function updateSettings(next: Settings) {
     setSettings(next);
     try { localStorage.setItem("verse-settings", JSON.stringify(next)); setSettingsError(""); }
     catch { setSettingsError("Settings will apply for this visit only."); }
   }
   const [translating, setTranslating] = useState(false);
-  const [initialized, setInitialized] = useState(false);
   const [loadingDismissed, setLoadingDismissed] = useState(false);
   const [track, setTrack] = useState<Track>(featuredTracks[0]);
   const [videoId, setVideoId] = useState<string | null>(featuredTracks[0].videoId!);
@@ -67,7 +81,7 @@ export default function Home() {
   const [playlistError, setPlaylistError] = useState("");
   const [storageError, setStorageError] = useState("");
   const [offset, setOffset] = useState(0);
-  const [palette, setPalette] = useState<WallpaperPalette>(defaultPalette);
+  const [palette, setPalette] = useState<ThemedPalette>(defaultPalette);
   const [artworkFailed, setArtworkFailed] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [link, setLink] = useState("");
@@ -317,7 +331,7 @@ export default function Home() {
 
   {initialized && <div className="app-shell" style={{ "--lyric-scale": settings.lyricScale } as CSSProperties}>
     <div className="wallpaper" aria-hidden="true" style={{
-      "--wallpaper-start": palette[0], "--wallpaper-middle": palette[1], "--wallpaper-end": palette[2],
+      "--wallpaper-start": palette[theme][0], "--wallpaper-middle": palette[theme][1], "--wallpaper-end": palette[theme][2],
     } as CSSProperties} />
 
     <header className="search-position"><Clock hour12={settings.hour12} /><SearchBar onSelect={selectTrack} />
