@@ -28,11 +28,22 @@ export function artworkPalette(pixels: Uint8ClampedArray): ThemedPalette {
     Math.max(...color.rgb) - Math.min(...color.rgb) > 45 &&
     strongestChannel(color.rgb) !== strongestChannel(primary) &&
     color.rgb.reduce((distance, value, i) => distance + (value - primary[i]) ** 2, 0) > 8000)?.rgb ?? primary;
-  const tint = (rgb: number[], white: number) => `rgb(${rgb.map((value) => Math.round(value * (1 - white) + 255 * white)).join(", ")})`;
+  // Day sets lightness directly and boosts saturation, so muted sleeves still give a clearly coloured (but light) room.
+  const pastel = (rgb: number[], lightness: number) => {
+    const [r, g, b] = rgb.map((value) => value / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), chroma = max - min;
+    const hue = chroma === 0 ? 0 : max === r ? ((g - b) / chroma) % 6 : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+    const saturation = chroma === 0 ? 0 : chroma / (1 - Math.abs(max + min - 1));
+    const vivid = Math.min(0.55, saturation * 1.4 + 0.15) * (chroma === 0 ? 0 : 1);
+    const c = (1 - Math.abs(2 * lightness - 1)) * vivid, x = c * (1 - Math.abs((((hue % 6) + 6) % 6) % 2 - 1)), m = lightness - c / 2;
+    const sector = Math.floor(((hue % 6) + 6) % 6);
+    const [r1, g1, b1] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][sector];
+    return `rgb(${[r1, g1, b1].map((value) => Math.round((value + m) * 255)).join(", ")})`;
+  };
   // Night keeps the same hues but sinks them into a warm near-black instead of lifting them toward white.
   const shade = (rgb: number[], dark: number) => `rgb(${rgb.map((value, i) => Math.round(value * (1 - dark) + [22, 18, 20][i] * dark)).join(", ")})`;
   return {
-    light: [tint(primary, 0.66), tint(primary, 0.9), tint(secondary, 0.57)],
+    light: [pastel(primary, 0.8), pastel(primary, 0.91), pastel(secondary, 0.76)],
     dark: [shade(primary, 0.7), shade(primary, 0.86), shade(secondary, 0.66)],
   };
 }
