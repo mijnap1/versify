@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 // Runs before first paint so a saved or system night theme never flashes light. Mirrors readSettings' theme default.
-const themeScript = `(function(){try{var t=JSON.parse(localStorage.getItem("verse-settings")||"{}").theme;if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
+const themeScript = `(function(){try{var t=JSON.parse(localStorage.getItem("verse-settings")||"{}").theme;if(t==="system")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";else if(t!=="dark")t="light";document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en" data-theme="light" suppressHydrationWarning>
