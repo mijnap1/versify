@@ -95,6 +95,8 @@ export default function Home() {
   const starterLyrics = useRef<{ id: string; data: LyricsState } | null>(null);
   const player = useYouTubePlayer(started ? videoId : null, playbackVersion);
   const isFavorite = favorites.some((saved) => saved.id === track.id);
+  // Name the tab after the song so it can be found among other tabs; keep "Versify" until the first song arrives.
+  useEffect(() => { if (initialized) document.title = `${track.title} · ${track.artist}`; }, [initialized, track.title, track.artist]);
 
   useEffect(() => {
     const controller = new AbortController();

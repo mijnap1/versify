@@ -61,7 +61,9 @@ export const SearchBar = memo(function SearchBar({ onSelect }: { onSelect: (trac
           if (event.key === "Escape") { setOpen(false); input.current?.blur(); }
           if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActive((value) => Math.min(value + 1, tracks.length - 1)); }
           if (event.key === "ArrowUp") { event.preventDefault(); setActive((value) => Math.max(-1, value - 1)); }
-          if (event.key === "Enter" && tracks[active]) { event.preventDefault(); select(tracks[active]); }
+          // Enter plays the highlighted result, or the top one. Ignore the Enter that confirms Japanese/Korean IME input (Safari reports it as keyCode 229).
+          const chosen = tracks[active] ?? (visible ? tracks[0] : undefined);
+          if (event.key === "Enter" && chosen && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) { event.preventDefault(); select(chosen); }
         }} />
       {loading ? <LoaderCircle size={16} className="animate-spin" /> : query &&
         <button className="icon-button small" aria-label="Clear search" title="Clear search" onClick={() => { setQuery(""); input.current?.focus(); }}><X size={15} /></button>}
